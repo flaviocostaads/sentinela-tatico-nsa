@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useLocation } from "react-router-dom";
 
 interface AdminEmergencyIncident {
   id: string;
@@ -35,12 +36,15 @@ const AdminEmergencyAlert = () => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
+  const location = useLocation();
 
-  // Only show for admins and operators
+  // Only show for admins and operators, and NOT on the dashboard page (where the map shows the alerts)
   const canViewAlerts = profile?.role === 'admin' || profile?.role === 'operador';
+  const isOnDashboard = location.pathname === '/';
+  const shouldShowAlerts = canViewAlerts && !isOnDashboard;
 
   useEffect(() => {
-    if (!canViewAlerts) return;
+    if (!shouldShowAlerts) return;
 
     subscribeToEmergencies();
     fetchActiveEmergencies();
@@ -57,7 +61,7 @@ const AdminEmergencyAlert = () => {
       const channels = supabase.getChannels();
       channels.forEach(channel => supabase.removeChannel(channel));
     };
-  }, [canViewAlerts]);
+  }, [shouldShowAlerts]);
 
   const subscribeToEmergencies = () => {
     const channel = supabase
@@ -93,7 +97,7 @@ const AdminEmergencyAlert = () => {
   };
 
   const fetchActiveEmergencies = async () => {
-    if (!canViewAlerts) return;
+    if (!shouldShowAlerts) return;
 
     try {
       const { data, error } = await supabase
@@ -184,7 +188,7 @@ const AdminEmergencyAlert = () => {
     }
   };
 
-  if (!canViewAlerts || !visible || emergencyIncidents.length === 0) {
+  if (!shouldShowAlerts || !visible || emergencyIncidents.length === 0) {
     return null;
   }
 
