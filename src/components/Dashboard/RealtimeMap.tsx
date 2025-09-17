@@ -9,6 +9,7 @@ import CheckpointNotification from "./CheckpointNotification";
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useSecureMapbox } from "@/hooks/useSecureMapbox";
+import { useEmergencyAlert } from "@/hooks/useEmergencyAlert";
 
 interface UserLocation {
   id: string;
@@ -57,6 +58,7 @@ const RealtimeMap = () => {
   const checkpointMarkers = useRef<mapboxgl.Marker[]>([]);
   const { toast } = useToast();
   const { token: mapboxToken } = useSecureMapbox();
+  const { hasActiveAlert, isPlaying } = useEmergencyAlert(activeEmergencies);
 
   useEffect(() => {
     if (mapboxToken) {
@@ -332,35 +334,72 @@ const RealtimeMap = () => {
       );
       
       const el = document.createElement('div');
-      el.className = hasActiveEmergency ? 'user-marker emergency-active' : 'user-marker';
-      el.style.width = '36px';
-      el.style.height = '36px';
+      el.className = hasActiveEmergency ? 'user-marker emergency-critical' : 'user-marker';
+      el.style.width = '40px';
+      el.style.height = '40px';
       el.style.borderRadius = '50%';
       el.style.backgroundColor = hasActiveEmergency ? 'hsl(var(--tactical-red))' : 'hsl(var(--tactical-green))';
-      el.style.border = '3px solid white';
-      el.style.boxShadow = hasActiveEmergency ? '0 2px 15px rgba(239, 68, 68, 0.6)' : '0 2px 15px rgba(0,0,0,0.4)';
+      el.style.border = hasActiveEmergency ? '4px solid #fff' : '3px solid white';
+      el.style.boxShadow = hasActiveEmergency ? 
+        '0 0 25px hsl(var(--tactical-red) / 0.8), 0 0 50px hsl(var(--tactical-red) / 0.6)' : 
+        '0 2px 15px rgba(0,0,0,0.4)';
       el.style.display = 'flex';
       el.style.alignItems = 'center';
       el.style.justifyContent = 'center';
-      el.style.fontSize = '18px';
+      el.style.fontSize = '20px';
       el.style.position = 'relative';
       el.style.zIndex = hasActiveEmergency ? '1000' : '100';
       el.textContent = vehicleIcon;
       
-      // Add pulsing ring effect for emergencies
+      // Add multiple pulsing ring effects for emergencies
       if (hasActiveEmergency) {
-        const ring = document.createElement('div');
-        ring.className = 'emergency-ring';
-        ring.style.position = 'absolute';
-        ring.style.top = '-6px';
-        ring.style.left = '-6px';
-        ring.style.width = '48px';
-        ring.style.height = '48px';
-        ring.style.borderRadius = '50%';
-        ring.style.border = '2px solid hsl(var(--tactical-red))';
-        ring.style.animation = 'emergency-ring 1.5s infinite ease-out';
-        ring.style.pointerEvents = 'none';
-        el.appendChild(ring);
+        // First ring - fast pulse
+        const ring1 = document.createElement('div');
+        ring1.className = 'emergency-ring-1';
+        ring1.style.position = 'absolute';
+        ring1.style.top = '-8px';
+        ring1.style.left = '-8px';
+        ring1.style.width = '56px';
+        ring1.style.height = '56px';
+        ring1.style.borderRadius = '50%';
+        ring1.style.border = '3px solid hsl(var(--tactical-red))';
+        ring1.style.animation = 'emergency-ring-fast 1s infinite ease-out';
+        ring1.style.pointerEvents = 'none';
+        el.appendChild(ring1);
+
+        // Second ring - slower pulse
+        const ring2 = document.createElement('div');
+        ring2.className = 'emergency-ring-2';
+        ring2.style.position = 'absolute';
+        ring2.style.top = '-12px';
+        ring2.style.left = '-12px';
+        ring2.style.width = '64px';
+        ring2.style.height = '64px';
+        ring2.style.borderRadius = '50%';
+        ring2.style.border = '2px solid hsl(var(--tactical-red))';
+        ring2.style.animation = 'emergency-ring-slow 1.8s infinite ease-out';
+        ring2.style.animationDelay = '0.3s';
+        ring2.style.pointerEvents = 'none';
+        el.appendChild(ring2);
+
+        // Emergency badge indicator
+        const emergencyBadge = document.createElement('div');
+        emergencyBadge.style.position = 'absolute';
+        emergencyBadge.style.top = '-5px';
+        emergencyBadge.style.right = '-5px';
+        emergencyBadge.style.width = '16px';
+        emergencyBadge.style.height = '16px';
+        emergencyBadge.style.borderRadius = '50%';
+        emergencyBadge.style.backgroundColor = '#ff0000';
+        emergencyBadge.style.color = 'white';
+        emergencyBadge.style.fontSize = '10px';
+        emergencyBadge.style.display = 'flex';
+        emergencyBadge.style.alignItems = 'center';
+        emergencyBadge.style.justifyContent = 'center';
+        emergencyBadge.style.animation = 'emergency-badge-blink 0.8s infinite';
+        emergencyBadge.style.fontWeight = 'bold';
+        emergencyBadge.textContent = '!';
+        el.appendChild(emergencyBadge);
       }
 
       const marker = new mapboxgl.Marker(el)
@@ -635,6 +674,11 @@ const RealtimeMap = () => {
             <Badge variant="secondary">
               {clients.length} clientes • {userLocations.length} táticos • {roundCheckpoints.length} pontos de ronda
             </Badge>
+            {hasActiveAlert && (
+              <Badge variant="destructive" className="animate-pulse">
+                🚨 {activeEmergencies.length} EMERGÊNCIA(S) ATIVA(S) • ÁUDIO: {isPlaying ? 'ATIVO' : 'INATIVO'}
+              </Badge>
+            )}
             <Button 
               size="sm" 
               variant="outline" 
