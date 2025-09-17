@@ -10,6 +10,7 @@ import FuelDialog from "./FuelDialog";
 import MaintenanceDialog from "./MaintenanceDialog";
 import TacticHeader from "./TacticHeader";
 import ShiftControlDialog from "./ShiftControlDialog";
+import PanicButton from "./PanicButton";
 
 
 interface DashboardProps {
@@ -303,19 +304,8 @@ const TacticDashboard = ({ onNavigate }: DashboardProps) => {
               </Button>
             </div>
 
-            {/* Emergency Button */}
-            <Button
-              onClick={() => onNavigate('incident')}
-              className="w-full h-16 bg-card hover:bg-accent border-2 border-tactical-red/20 rounded-xl flex items-center justify-center shadow-sm transition-colors group pulse-tactical"
-            >
-              <div className="w-12 h-12 bg-tactical-red/10 rounded-xl flex items-center justify-center mr-4 group-hover:bg-tactical-red/20 transition-colors">
-                <AlertTriangle className="w-6 h-6 text-tactical-red" />
-              </div>
-              <div className="text-left">
-                <span className="text-lg font-semibold block text-foreground">Ocorrência Rápida</span>
-                <span className="text-sm text-muted-foreground">Reportar emergência</span>
-              </div>
-            </Button>
+            {/* Panic/Emergency Button */}
+            <PanicButton onNavigate={onNavigate} />
           </div>
 
           {/* Bottom padding for mobile navigation */}
