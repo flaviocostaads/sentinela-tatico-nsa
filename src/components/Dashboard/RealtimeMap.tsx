@@ -10,6 +10,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useSecureMapbox } from "@/hooks/useSecureMapbox";
 import { useEmergencyAlert } from "@/hooks/useEmergencyAlert";
+import { useRealtimeMap } from "@/hooks/useRealtimeMap";
 import "./EmergencyMapStyles.css";
 
 interface UserLocation {
@@ -51,43 +52,47 @@ const RealtimeMap = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const userMarkers = useRef<{ [key: string]: mapboxgl.Marker }>({});
-  const [userLocations, setUserLocations] = useState<UserLocation[]>([]);
-  const [clients, setClients] = useState<any[]>([]);
   const [roundCheckpoints, setRoundCheckpoints] = useState<RoundCheckpoint[]>([]);
-  const [activeEmergencies, setActiveEmergencies] = useState<EmergencyIncident[]>([]);
   const clientMarkers = useRef<mapboxgl.Marker[]>([]);
   const checkpointMarkers = useRef<mapboxgl.Marker[]>([]);
   const { toast } = useToast();
   const { token: mapboxToken } = useSecureMapbox();
+  
+  // Use the new realtime map hook for automatic updates
+  const { 
+    userLocations, 
+    clients, 
+    activeEmergencies, 
+    lastUpdateTime, 
+    isAutoUpdating,
+    fetchAllData 
+  } = useRealtimeMap();
+  
   const { hasActiveAlert, isPlaying } = useEmergencyAlert(activeEmergencies);
 
   useEffect(() => {
     if (mapboxToken) {
       initializeMap();
-      const unsubscribe = subscribeToUserLocations();
-      const unsubscribeCheckpoints = subscribeToCheckpointVisits();
-      const unsubscribeEmergencies = subscribeToEmergencies();
-      fetchClients();
-
-      return () => {
-        unsubscribe();
-        unsubscribeCheckpoints();
-        unsubscribeEmergencies();
-      };
     }
   }, [mapboxToken]);
 
+  // Update map when locations change
   useEffect(() => {
     if (map.current) {
       updateUserLocations();
+      updateClientMarkers();
+    }
+  }, [userLocations, clients]);
+
+  // Update checkpoints when user locations change (they contain active rounds)
+  useEffect(() => {
+    if (map.current && userLocations.length > 0) {
+      const activeRounds = userLocations.map(loc => loc.rounds).filter(Boolean);
+      if (activeRounds.length > 0) {
+        fetchRoundCheckpoints(activeRounds);
+      }
     }
   }, [userLocations]);
-
-  useEffect(() => {
-    if (map.current) {
-      updateRoundCheckpoints();
-    }
-  }, [roundCheckpoints]);
 
   const initializeMap = () => {
     if (!mapContainer.current || map.current) return;
@@ -109,9 +114,9 @@ const RealtimeMap = () => {
         console.warn('Mapbox error:', e);
       });
       
-      // Load client markers after map is loaded
+      // Load initial data after map is loaded
       map.current.on('load', () => {
-        fetchClients();
+        fetchAllData();
       });
     } catch (error) {
       console.error('Error initializing map:', error);
@@ -123,27 +128,7 @@ const RealtimeMap = () => {
     }
   };
 
-  const fetchClients = async () => {
-    try {
-      const { data: clientData, error } = await supabase
-        .from("clients")
-        .select("*")
-        .eq("active", true)
-        .not("lat", "is", null)
-        .not("lng", "is", null);
-
-      if (error) throw error;
-
-      if (clientData) {
-        setClients(clientData);
-        addClientMarkers(clientData);
-      }
-    } catch (error) {
-      console.error("Error fetching clients:", error);
-    }
-  };
-
-  const addClientMarkers = (clientData: any[]) => {
+  const updateClientMarkers = () => {
     if (!map.current || !map.current.getContainer()) return;
 
     // Clear existing client markers
@@ -158,7 +143,7 @@ const RealtimeMap = () => {
     });
     clientMarkers.current = [];
 
-    clientData.forEach(client => {
+    clients.forEach(client => {
       if (client.lat && client.lng) {
         // Create client marker
         const el = document.createElement('div');
@@ -211,101 +196,7 @@ const RealtimeMap = () => {
     });
   };
 
-  const subscribeToUserLocations = () => {
-    const channel = supabase
-      .channel('user-locations-realtime')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'user_locations',
-        filter: 'is_active=eq.true'
-      }, () => {
-        fetchUserLocations();
-      })
-      .subscribe();
-
-    fetchUserLocations();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  };
-
-  const fetchUserLocations = async () => {
-    try {
-      // First get locations without the problematic join
-      const { data: locationData, error: locationError } = await supabase
-        .from("user_locations")
-        .select("*")
-        .eq("is_active", true)
-        .order("recorded_at", { ascending: false });
-
-      if (locationError) throw locationError;
-
-      if (!locationData || locationData.length === 0) {
-        setUserLocations([]);
-        return;
-      }
-
-      // Get unique user_ids with active rounds
-      const userIds = [...new Set(locationData.map(l => l.user_id))];
-      
-      // Get active rounds for these users
-      const { data: roundsData, error: roundsError } = await supabase
-        .from("rounds")
-        .select("id, user_id, vehicle, status, template_id")
-        .in("user_id", userIds)
-        .eq("status", "active");
-
-      if (roundsError) throw roundsError;
-
-      // Get profiles for user names
-      const { data: profilesData, error: profilesError } = await supabase
-        .from("profiles")
-        .select("user_id, name")
-        .in("user_id", userIds);
-
-      if (profilesError) throw profilesError;
-
-      // Group by user_id and get latest location for each user with active rounds
-      const latestLocations = locationData.reduce((acc: UserLocation[], location: any) => {
-        const activeRound = roundsData?.find(r => r.user_id === location.user_id);
-        const profile = profilesData?.find(p => p.user_id === location.user_id);
-        
-        if (activeRound) {
-          const existingIndex = acc.findIndex(l => l.user_id === location.user_id);
-          const locationWithData = {
-            ...location,
-            rounds: { 
-              id: activeRound.id,
-              vehicle: activeRound.vehicle, 
-              status: activeRound.status,
-              template_id: activeRound.template_id
-            },
-            profiles: { name: profile?.name || 'Tático' }
-          };
-          
-          if (existingIndex === -1) {
-            acc.push(locationWithData);
-          } else if (new Date(location.recorded_at) > new Date(acc[existingIndex].recorded_at)) {
-            acc[existingIndex] = locationWithData;
-          }
-        }
-        return acc;
-      }, []);
-
-      setUserLocations(latestLocations);
-      
-      // Fetch round checkpoints for active rounds
-      if (roundsData && roundsData.length > 0) {
-        fetchRoundCheckpoints(roundsData);
-      } else {
-        setRoundCheckpoints([]);
-      }
-    } catch (error) {
-      console.error("Error fetching user locations:", error);
-    }
-  };
+  // Remove unused functions - data now comes from useRealtimeMap hook
 
   const updateUserLocations = () => {
     if (!map.current || !map.current.getContainer()) return;
@@ -506,61 +397,7 @@ const RealtimeMap = () => {
     }
   };
 
-  const subscribeToCheckpointVisits = () => {
-    const channel = supabase
-      .channel('checkpoint-visits-realtime')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'checkpoint_visits'
-      }, () => {
-        // Refetch locations which will also update checkpoints
-        fetchUserLocations();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  };
-
-  const subscribeToEmergencies = () => {
-    const channel = supabase
-      .channel('emergency-incidents-realtime')
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'incidents'
-      }, () => {
-        fetchActiveEmergencies();
-      })
-      .subscribe();
-
-    fetchActiveEmergencies();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  };
-
-  const fetchActiveEmergencies = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("incidents")
-        .select("id, round_id, priority, status, reported_at")
-        .eq("status", "open")
-        .in("priority", ["medium", "high", "critical"]);
-
-      if (error) throw error;
-
-      setActiveEmergencies(data || []);
-      
-      // Log for debugging
-      console.log("Active emergencies:", data);
-    } catch (error) {
-      console.error("Error fetching active emergencies:", error);
-    }
-  };
+  // Remove other unused subscription functions
 
   const fetchRoundCheckpoints = async (activeRounds: any[]) => {
     try {
@@ -717,8 +554,7 @@ const RealtimeMap = () => {
   };
 
   const refreshMap = () => {
-    fetchUserLocations();
-    fetchClients();
+    fetchAllData();
   };
 
   return (
@@ -738,6 +574,15 @@ const RealtimeMap = () => {
                 🚨 {activeEmergencies.length} EMERGÊNCIA(S) ATIVA(S) • ÁUDIO: {isPlaying ? 'ATIVO' : 'INATIVO'}
               </Badge>
             )}
+            <Badge 
+              variant={isAutoUpdating ? "default" : "secondary"} 
+              className="flex items-center gap-2"
+            >
+              <div className={`w-2 h-2 rounded-full ${isAutoUpdating ? 'bg-tactical-green animate-pulse' : 'bg-gray-400'}`}></div>
+              <span className="text-xs">
+                {isAutoUpdating ? 'Auto-Atualização Ativa' : 'Desconectado'}
+              </span>
+            </Badge>
             <Button 
               size="sm" 
               variant="outline" 
@@ -752,10 +597,9 @@ const RealtimeMap = () => {
             >
               Tela Cheia
             </Button>
-            <Button size="sm" variant="outline" onClick={refreshMap}>
-              <RotateCcw className="w-4 h-4 mr-1" />
-              Atualizar
-            </Button>
+            <div className="text-xs text-muted-foreground">
+              Última atualização: {lastUpdateTime.toLocaleTimeString('pt-BR')}
+            </div>
           </div>
         </CardTitle>
       </CardHeader>
@@ -764,15 +608,10 @@ const RealtimeMap = () => {
           {/* Full screen controls overlay */}
           <div className="fullscreen-controls absolute top-4 right-4 z-50 hidden bg-background/90 backdrop-blur-sm p-2 rounded-lg border">
             <div className="flex gap-2">
-              <Button 
-                size="sm" 
-                variant="outline" 
-                onClick={refreshMap}
-                className="bg-background/50"
-              >
-                <RotateCcw className="w-4 h-4 mr-1" />
-                Atualizar
-              </Button>
+              <div className="flex items-center gap-2 bg-background/50 px-3 py-1 rounded">
+                <div className="w-2 h-2 bg-tactical-green rounded-full animate-pulse"></div>
+                <span className="text-xs text-foreground">Atualização Automática</span>
+              </div>
               <Button 
                 size="sm" 
                 variant="destructive" 
