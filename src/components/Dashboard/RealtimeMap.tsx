@@ -343,14 +343,33 @@ const RealtimeMap = () => {
       el.style.alignItems = 'center';
       el.style.justifyContent = 'center';
       el.style.fontSize = '18px';
+      el.style.position = 'relative';
+      el.style.zIndex = hasActiveEmergency ? '1000' : '100';
       el.textContent = vehicleIcon;
+      
+      // Add pulsing ring effect for emergencies
+      if (hasActiveEmergency) {
+        const ring = document.createElement('div');
+        ring.className = 'emergency-ring';
+        ring.style.position = 'absolute';
+        ring.style.top = '-6px';
+        ring.style.left = '-6px';
+        ring.style.width = '48px';
+        ring.style.height = '48px';
+        ring.style.borderRadius = '50%';
+        ring.style.border = '2px solid hsl(var(--tactical-red))';
+        ring.style.animation = 'emergency-ring 1.5s infinite ease-out';
+        ring.style.pointerEvents = 'none';
+        el.appendChild(ring);
+      }
 
       const marker = new mapboxgl.Marker(el)
         .setLngLat([location.lng, location.lat])
         .setPopup(
           new mapboxgl.Popup({ offset: 25 }).setHTML(`
             <div style="padding: 10px;">
-              <h3 style="margin: 0 0 5px 0;">${location.profiles?.name || 'Tático'} ${location.rounds?.vehicle === 'motorcycle' ? '(Moto)' : '(Carro)'}</h3>
+              <h3 style="margin: 0 0 5px 0; ${hasActiveEmergency ? 'color: hsl(var(--tactical-red)); font-weight: bold;' : ''}">${location.profiles?.name || 'Tático'} ${location.rounds?.vehicle === 'motorcycle' ? '(Moto)' : '(Carro)'}</h3>
+              ${hasActiveEmergency ? '<p style="margin: 0 0 5px 0; color: hsl(var(--tactical-red)); font-weight: bold; font-size: 12px;">🚨 EMERGÊNCIA ATIVA</p>' : ''}
               <p style="margin: 0; font-size: 12px;">
                 ${new Date(location.recorded_at).toLocaleString('pt-BR')}
               </p>
@@ -437,6 +456,9 @@ const RealtimeMap = () => {
       if (error) throw error;
 
       setActiveEmergencies(data || []);
+      
+      // Log for debugging
+      console.log("Active emergencies:", data);
     } catch (error) {
       console.error("Error fetching active emergencies:", error);
     }
