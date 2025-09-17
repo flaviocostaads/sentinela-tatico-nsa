@@ -1,0 +1,79 @@
+/* Emergency Alert Animations for Map Markers */
+@keyframes emergency-bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateX(-50%) translateY(0);
+  }
+  40% {
+    transform: translateX(-50%) translateY(-10px);
+  }
+  60% {
+    transform: translateX(-50%) translateY(-5px);
+  }
+}
+
+@keyframes emergency-blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  25%, 75% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes emergency-ring-fast {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+@keyframes emergency-ring-slow {
+  0% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+@keyframes emergency-badge-blink {
+  0%, 50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  25% {
+    opacity: 0.7;
+    transform: scale(1.1);
+  }
+  75% {
+    opacity: 0.9;
+    transform: scale(0.95);
+  }
+}
+
+/* Ensure emergency popups are visible above everything */
+.emergency-alert-popup {
+  pointer-events: none;
+}
+
+.user-marker.emergency-critical {
+  animation: emergency-pulse 2s infinite;
+}
+
+@keyframes emergency-pulse {
+  0% {
+    box-shadow: 0 0 25px hsl(var(--tactical-red) / 0.8), 0 0 50px hsl(var(--tactical-red) / 0.6);
+  }
+  50% {
+    box-shadow: 0 0 35px hsl(var(--tactical-red) / 1), 0 0 70px hsl(var(--tactical-red) / 0.8);
+  }
+  100% {
+    box-shadow: 0 0 25px hsl(var(--tactical-red) / 0.8), 0 0 50px hsl(var(--tactical-red) / 0.6);
+  }
+}

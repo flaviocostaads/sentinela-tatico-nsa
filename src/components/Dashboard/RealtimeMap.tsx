@@ -10,6 +10,7 @@ import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useSecureMapbox } from "@/hooks/useSecureMapbox";
 import { useEmergencyAlert } from "@/hooks/useEmergencyAlert";
+import "./EmergencyMapStyles.css";
 
 interface UserLocation {
   id: string;
@@ -402,19 +403,77 @@ const RealtimeMap = () => {
         el.appendChild(emergencyBadge);
       }
 
+      // Create emergency alert overlay that appears directly on the map
+      if (hasActiveEmergency) {
+        const emergencyDetails = activeEmergencies.find(emergency => 
+          emergency.round_id === location.rounds?.id && 
+          emergency.status === 'open' &&
+          (emergency.priority === 'medium' || emergency.priority === 'high' || emergency.priority === 'critical')
+        );
+
+        // Add a floating emergency alert popup
+        const alertPopup = document.createElement('div');
+        alertPopup.className = 'emergency-alert-popup';
+        alertPopup.style.cssText = `
+          position: absolute;
+          top: -100px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: linear-gradient(135deg, #dc2626, #ef4444);
+          color: white;
+          padding: 12px 16px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: bold;
+          white-space: nowrap;
+          box-shadow: 0 8px 25px rgba(220, 38, 38, 0.4), 0 0 0 3px rgba(255, 255, 255, 0.8);
+          animation: emergency-bounce 2s infinite ease-in-out;
+          z-index: 1001;
+          border: 2px solid white;
+          min-width: 200px;
+          text-align: center;
+        `;
+        alertPopup.innerHTML = `
+          <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+            <span style="font-size: 14px; animation: emergency-blink 0.8s infinite;">🚨</span>
+            <span>EMERGÊNCIA ATIVA</span>
+            <span style="font-size: 14px; animation: emergency-blink 0.8s infinite;">🚨</span>
+          </div>
+          <div style="font-size: 10px; margin-top: 4px; opacity: 0.9;">
+            ${location.profiles?.name || 'Tático'} - ${emergencyDetails?.priority?.toUpperCase() || 'ALTA'}
+          </div>
+        `;
+        el.appendChild(alertPopup);
+      }
+
       const marker = new mapboxgl.Marker(el)
         .setLngLat([location.lng, location.lat])
         .setPopup(
           new mapboxgl.Popup({ offset: 25 }).setHTML(`
-            <div style="padding: 10px;">
-              <h3 style="margin: 0 0 5px 0; ${hasActiveEmergency ? 'color: hsl(var(--tactical-red)); font-weight: bold;' : ''}">${location.profiles?.name || 'Tático'} ${location.rounds?.vehicle === 'motorcycle' ? '(Moto)' : '(Carro)'}</h3>
-              ${hasActiveEmergency ? '<p style="margin: 0 0 5px 0; color: hsl(var(--tactical-red)); font-weight: bold; font-size: 12px;">🚨 EMERGÊNCIA ATIVA</p>' : ''}
-              <p style="margin: 0; font-size: 12px;">
-                ${new Date(location.recorded_at).toLocaleString('pt-BR')}
+            <div style="padding: 12px; ${hasActiveEmergency ? 'border: 3px solid #dc2626; background: linear-gradient(135deg, #fef2f2, #ffffff);' : ''}">
+              <h3 style="margin: 0 0 8px 0; ${hasActiveEmergency ? 'color: #dc2626; font-weight: bold; font-size: 16px;' : 'font-weight: 600;'}">${hasActiveEmergency ? '🚨 ' : ''}${location.profiles?.name || 'Tático'} ${location.rounds?.vehicle === 'motorcycle' ? '(Moto)' : '(Carro)'}</h3>
+              ${hasActiveEmergency ? `
+                <div style="background: #dc2626; color: white; padding: 6px 8px; border-radius: 6px; margin: 0 0 8px 0; font-weight: bold; font-size: 13px; text-align: center;">
+                  🚨 SITUAÇÃO DE EMERGÊNCIA ATIVA 🚨
+                </div>
+                <p style="margin: 0 0 6px 0; color: #dc2626; font-weight: bold; font-size: 12px;">
+                  Prioridade: ${activeEmergencies.find(e => e.round_id === location.rounds?.id)?.priority?.toUpperCase() || 'ALTA'}
+                </p>
+              ` : ''}
+              <p style="margin: 0 0 4px 0; font-size: 12px;">
+                📅 ${new Date(location.recorded_at).toLocaleString('pt-BR')}
               </p>
-              <p style="margin: 0; font-size: 12px;">
-                ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}
+              <p style="margin: 0; font-size: 11px; color: #666;">
+                📍 ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}
               </p>
+              ${hasActiveEmergency ? `
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #dc2626;">
+                  <button onclick="window.open('https://maps.google.com?q=${location.lat},${location.lng}', '_blank')" 
+                    style="background: #dc2626; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: bold;">
+                    🗺️ Ver no Google Maps
+                  </button>
+                </div>
+              ` : ''}
             </div>
           `)
         )

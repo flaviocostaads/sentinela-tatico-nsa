@@ -184,7 +184,10 @@ const AdminEmergencyAlert = () => {
     }
   };
 
-  if (!canViewAlerts || !visible || emergencyIncidents.length === 0) {
+  // Only show alert in corner when not on map page
+  const isOnMapPage = window.location.pathname.includes('/map') || window.location.pathname === '/';
+  
+  if (!canViewAlerts || !visible || emergencyIncidents.length === 0 || isOnMapPage) {
     return null;
   }
 
