@@ -230,10 +230,9 @@ const MaintenanceDialog = ({ open, onOpenChange, vehicleId, roundId, currentOdom
                   <SelectValue placeholder="Selecione o tipo" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="preventiva">Preventiva</SelectItem>
-                  <SelectItem value="corretiva">Corretiva</SelectItem>
-                  <SelectItem value="preditiva">Preditiva</SelectItem>
-                  <SelectItem value="emergencial">Emergencial</SelectItem>
+                  <SelectItem value="preventive">Preventiva</SelectItem>
+                  <SelectItem value="corrective">Corretiva</SelectItem>
+                  <SelectItem value="emergency">Emergencial</SelectItem>
                 </SelectContent>
               </Select>
             </div>

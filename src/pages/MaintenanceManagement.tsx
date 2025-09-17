@@ -90,10 +90,9 @@ const MaintenanceManagement = () => {
   const { toast } = useToast();
 
   const maintenanceTypes = [
-    "preventiva",
-    "corretiva", 
-    "preditiva",
-    "emergencial"
+    "preventive",
+    "corrective", 
+    "emergency"
   ];
 
   const serviceTypes = [
@@ -127,10 +126,9 @@ const MaintenanceManagement = () => {
 
   const getMaintenanceLabel = (maintenanceType: string) => {
     const labels: { [key: string]: string } = {
-      "preventiva": "Preventiva",
-      "corretiva": "Corretiva",
-      "preditiva": "Preditiva", 
-      "emergencial": "Emergencial"
+      "preventive": "Preventiva",
+      "corrective": "Corretiva",
+      "emergency": "Emergencial"
     };
     return labels[maintenanceType] || maintenanceType;
   };
@@ -299,11 +297,11 @@ const MaintenanceManagement = () => {
 
   const getServiceIcon = (maintenanceType: string) => {
     switch (maintenanceType.toLowerCase()) {
-      case 'preventiva':
+      case 'preventive':
         return CheckCircle;
-      case 'corretiva':
+      case 'corrective':
         return Wrench;
-      case 'emergencial':
+      case 'emergency':
         return AlertTriangle;
       default:
         return Wrench;
@@ -312,11 +310,11 @@ const MaintenanceManagement = () => {
 
   const getServiceColor = (maintenanceType: string) => {
     switch (maintenanceType.toLowerCase()) {
-      case 'preventiva':
+      case 'preventive':
         return 'bg-tactical-green text-white';
-      case 'corretiva':
+      case 'corrective':
         return 'bg-tactical-amber text-white';
-      case 'emergencial':
+      case 'emergency':
         return 'bg-tactical-red text-white';
       default:
         return 'bg-muted text-muted-foreground';

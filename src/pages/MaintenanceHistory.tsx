@@ -336,7 +336,6 @@ const MaintenanceHistory = () => {
                     <SelectItem value="all">Todos os Tipos</SelectItem>
                     <SelectItem value="preventive">Preventiva</SelectItem>
                     <SelectItem value="corrective">Corretiva</SelectItem>
-                    <SelectItem value="predictive">Preditiva</SelectItem>
                     <SelectItem value="emergency">Emergencial</SelectItem>
                   </SelectContent>
                 </Select>
@@ -459,7 +458,6 @@ const MaintenanceHistory = () => {
                         <SelectItem value="preventive">Preventiva</SelectItem>
                         <SelectItem value="corrective">Corretiva</SelectItem>
                         <SelectItem value="emergency">Emergencial</SelectItem>
-                        <SelectItem value="predictive">Preditiva</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
