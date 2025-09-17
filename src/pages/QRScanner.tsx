@@ -42,33 +42,57 @@ const QRScannerPage = () => {
   const checkPermissionsAndStart = async () => {
     setIsLoading(true);
     setError("");
+    resetState();
     
     try {
       console.log("Starting camera initialization...");
       
+      // Check if MediaDevices API is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("BROWSER_NOT_SUPPORTED");
       }
       
+      // Request camera permission explicitly first
+      console.log("Requesting camera permissions...");
+      
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      });
+      
+      // Stop the test stream immediately
+      stream.getTracks().forEach(track => track.stop());
+      
+      console.log("Camera permission granted, initializing scanner...");
       setHasPermission(true);
-      await startScanner();
+      
+      // Small delay to ensure state is updated
+      setTimeout(() => {
+        startScanner();
+      }, 100);
       
     } catch (error: any) {
       console.error("Camera initialization failed:", error);
       setHasPermission(false);
       
+      let errorMessage = "Erro ao acessar câmera. Tente novamente ou use o código manual.";
+      
       if (error.name === 'NotAllowedError') {
-        setError("Permissão de câmera necessária para leitura do QR Code. Vá em configurações do navegador para permitir o acesso.");
+        errorMessage = "Permissão de câmera necessária para leitura do QR Code. Vá em configurações do navegador para permitir o acesso.";
       } else if (error.name === 'NotFoundError') {
-        setError("Nenhuma câmera encontrada no dispositivo.");
+        errorMessage = "Nenhuma câmera encontrada no dispositivo.";
       } else if (error.name === 'NotReadableError') {
-        setError("Câmera está sendo usada por outro aplicativo. Feche outros apps e tente novamente.");
+        errorMessage = "Câmera está sendo usada por outro aplicativo. Feche outros apps e tente novamente.";
       } else if (error.message === 'BROWSER_NOT_SUPPORTED') {
-        setError("Navegador não suporta acesso à câmera. Use o código manual.");
-      } else {
-        setError("Erro ao acessar câmera. Tente novamente ou use o código manual.");
+        errorMessage = "Navegador não suporta acesso à câmera. Use o código manual.";
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage = "Configuração de câmera não suportada. Use o código manual.";
       }
       
+      setError(errorMessage);
       setShowManualInput(true);
     } finally {
       setIsLoading(false);
@@ -76,45 +100,80 @@ const QRScannerPage = () => {
   };
 
   const startScanner = async () => {
-    if (!videoRef.current || !hasPermission) return;
+    if (!videoRef.current) return;
 
     try {
       console.log("Starting QR Scanner...");
       
-      // Let QrScanner handle the camera stream entirely
+      // Ensure video element is properly setup
+      const video = videoRef.current;
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('webkit-playsinline', 'true');
+      video.muted = true;
+      
+      // Create QrScanner with improved mobile configuration
       qrScannerRef.current = new QrScanner(
-        videoRef.current,
-        (result) => handleScanResult(result.data),
+        video,
+        (result) => {
+          console.log("QR Scanner result:", result);
+          handleScanResult(result.data);
+        },
         {
           returnDetailedScanResult: true,
           highlightScanRegion: true,
           highlightCodeOutline: true,
           preferredCamera: 'environment',
-          maxScansPerSecond: 3,
+          maxScansPerSecond: 5,
+          calculateScanRegion: (video) => {
+            const smallestDimension = Math.min(video.videoWidth, video.videoHeight);
+            const scanRegionSize = Math.round(smallestDimension * 0.7);
+            const x = Math.round((video.videoWidth - scanRegionSize) / 2);
+            const y = Math.round((video.videoHeight - scanRegionSize) / 2);
+            return {
+              x,
+              y,
+              width: scanRegionSize,
+              height: scanRegionSize
+            };
+          }
         }
       );
 
+      console.log("QrScanner instance created, starting...");
       await qrScannerRef.current.start();
       
       console.log("QR Scanner started successfully");
+      setError(""); // Clear any previous errors
       
-      // Check for flash after a delay
+      // Check for flash after scanner is started
       setTimeout(() => {
         if (qrScannerRef.current) {
           try {
             if (qrScannerRef.current.hasFlash()) {
               setHasFlash(true);
               console.log("Flash available");
+            } else {
+              console.log("Flash not available");
             }
           } catch (e) {
             console.log("Flash check error:", e);
           }
         }
-      }, 1000);
+      }, 1500);
       
     } catch (error: any) {
       console.error("QR Scanner start error:", error);
-      setError("Erro ao iniciar o scanner. Use o código manual.");
+      let errorMessage = "Erro ao iniciar o scanner. Use o código manual.";
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage = "Permissão de câmera negada. Permita o acesso à câmera e tente novamente.";
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = "Câmera não encontrada. Use o código manual.";
+      } else if (error.name === 'NotReadableError') {
+        errorMessage = "Câmera em uso por outro aplicativo. Feche outros apps e tente novamente.";
+      }
+      
+      setError(errorMessage);
       setShowManualInput(true);
     }
   };
@@ -305,10 +364,14 @@ const QRScannerPage = () => {
             {/* Camera View */}
             <video
               ref={videoRef}
-              className="absolute inset-0 w-full h-full object-cover"
+              className="absolute inset-0 w-full h-full object-cover bg-black"
               autoPlay
               playsInline
               muted
+              webkit-playsinline="true"
+              style={{
+                transform: 'scaleX(-1)', // Mirror effect for better UX
+              }}
             />
             
             {/* QR Scanner Overlay */}

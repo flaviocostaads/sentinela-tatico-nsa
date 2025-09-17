@@ -72,6 +72,13 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
     getCurrentLocation();
     checkBaseControlStatus();
     
+    // Check for QR scan result from sessionStorage
+    const qrResult = sessionStorage.getItem('qrScanResult');
+    if (qrResult) {
+      sessionStorage.removeItem('qrScanResult');
+      handleQrScan(qrResult);
+    }
+    
     // Setup location tracking for geofence
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
