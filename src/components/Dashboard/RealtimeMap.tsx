@@ -37,6 +37,14 @@ interface RoundCheckpoint {
   order_index: number;
 }
 
+interface EmergencyIncident {
+  id: string;
+  round_id: string;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  status: string;
+  reported_at: string;
+}
+
 const RealtimeMap = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -44,6 +52,7 @@ const RealtimeMap = () => {
   const [userLocations, setUserLocations] = useState<UserLocation[]>([]);
   const [clients, setClients] = useState<any[]>([]);
   const [roundCheckpoints, setRoundCheckpoints] = useState<RoundCheckpoint[]>([]);
+  const [activeEmergencies, setActiveEmergencies] = useState<EmergencyIncident[]>([]);
   const clientMarkers = useRef<mapboxgl.Marker[]>([]);
   const checkpointMarkers = useRef<mapboxgl.Marker[]>([]);
   const { toast } = useToast();
@@ -54,10 +63,13 @@ const RealtimeMap = () => {
       initializeMap();
       const unsubscribe = subscribeToUserLocations();
       const unsubscribeCheckpoints = subscribeToCheckpointVisits();
+      const unsubscribeEmergencies = subscribeToEmergencies();
       fetchClients();
 
       return () => {
-        // ... keep existing code (cleanup logic)
+        unsubscribe();
+        unsubscribeCheckpoints();
+        unsubscribeEmergencies();
       };
     }
   }, [mapboxToken]);
@@ -312,14 +324,21 @@ const RealtimeMap = () => {
       // Get vehicle type icon
       const vehicleIcon = location.rounds?.vehicle === 'motorcycle' ? '🏍️' : '🚗';
       
+      // Check if this user has an active emergency
+      const hasActiveEmergency = activeEmergencies.some(emergency => 
+        emergency.round_id === location.rounds?.id && 
+        emergency.status === 'open' &&
+        (emergency.priority === 'medium' || emergency.priority === 'high' || emergency.priority === 'critical')
+      );
+      
       const el = document.createElement('div');
-      el.className = 'user-marker';
+      el.className = hasActiveEmergency ? 'user-marker emergency-active' : 'user-marker';
       el.style.width = '36px';
       el.style.height = '36px';
       el.style.borderRadius = '50%';
-      el.style.backgroundColor = 'hsl(var(--tactical-green))';
+      el.style.backgroundColor = hasActiveEmergency ? 'hsl(var(--tactical-red))' : 'hsl(var(--tactical-green))';
       el.style.border = '3px solid white';
-      el.style.boxShadow = '0 2px 15px rgba(0,0,0,0.4)';
+      el.style.boxShadow = hasActiveEmergency ? '0 2px 15px rgba(239, 68, 68, 0.6)' : '0 2px 15px rgba(0,0,0,0.4)';
       el.style.display = 'flex';
       el.style.alignItems = 'center';
       el.style.justifyContent = 'center';
@@ -386,6 +405,41 @@ const RealtimeMap = () => {
     return () => {
       supabase.removeChannel(channel);
     };
+  };
+
+  const subscribeToEmergencies = () => {
+    const channel = supabase
+      .channel('emergency-incidents-realtime')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'incidents'
+      }, () => {
+        fetchActiveEmergencies();
+      })
+      .subscribe();
+
+    fetchActiveEmergencies();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  };
+
+  const fetchActiveEmergencies = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("incidents")
+        .select("id, round_id, priority, status, reported_at")
+        .eq("status", "open")
+        .in("priority", ["medium", "high", "critical"]);
+
+      if (error) throw error;
+
+      setActiveEmergencies(data || []);
+    } catch (error) {
+      console.error("Error fetching active emergencies:", error);
+    }
   };
 
   const fetchRoundCheckpoints = async (activeRounds: any[]) => {

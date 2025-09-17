@@ -214,6 +214,22 @@ Military/Security themed dark professional interface
     animation: pulse-glow 2s ease-in-out infinite;
   }
 
+  /* Emergency Alert Animation */
+  .emergency-active {
+    animation: emergency-pulse 1s infinite ease-in-out;
+  }
+
+  @keyframes emergency-pulse {
+    0%, 100% { 
+      transform: scale(1);
+      box-shadow: 0 0 15px hsl(var(--tactical-red) / 0.7);
+    }
+    50% { 
+      transform: scale(1.1);
+      box-shadow: 0 0 25px hsl(var(--tactical-red) / 0.9);
+    }
+  }
+
   /* Full screen map controls */
   #realtime-map:fullscreen .fullscreen-controls {
     display: block !important;
