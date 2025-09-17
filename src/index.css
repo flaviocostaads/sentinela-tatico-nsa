@@ -1,0 +1,221 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Sentinela Tático NSA - Design System
+Military/Security themed dark professional interface
+*/
+
+@layer base {
+  :root {
+    /* Light professional theme (default) */
+    --background: 0 0% 100%;
+    --foreground: 224 71.4% 4.1%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 224 71.4% 4.1%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 71.4% 4.1%;
+
+    /* Navy blue primary - security/trust */
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --primary-glow: 221.2 83.2% 63.3%;
+
+    /* Clean secondary */
+    --secondary: 220 14.3% 95.9%;
+    --secondary-foreground: 220.9 39.3% 11%;
+
+    --muted: 220 14.3% 95.9%;
+    --muted-foreground: 220 15% 25%;
+
+    --accent: 220 14.3% 95.9%;
+    --accent-foreground: 220.9 39.3% 11%;
+
+    /* Clean status colors */
+    --success: 142 76% 36%;
+    --success-foreground: 355.7 100% 97.3%;
+    --warning: 32 95% 44%;
+    --warning-foreground: 210 40% 98%;
+    --danger: 0 84% 60%;
+    --danger-foreground: 210 40% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 221.2 83.2% 53.3%;
+
+    --radius: 0.5rem;
+
+    /* Custom tactical design tokens */
+    --tactical-blue: 217 91% 60%;
+    --tactical-green: 142 76% 36%;
+    --tactical-red: 0 84% 60%;
+    --tactical-amber: 32 95% 44%;
+    
+    /* Clean gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+    --gradient-tactical: linear-gradient(135deg, hsl(var(--tactical-blue)), hsl(var(--accent)));
+    --gradient-status: linear-gradient(90deg, hsl(var(--tactical-green)), hsl(var(--tactical-blue)));
+    
+    /* Clean shadows */
+    --shadow-tactical: 0 10px 30px -10px hsl(var(--primary) / 0.2);
+    --shadow-glow: 0 0 40px hsl(var(--primary-glow) / 0.3);
+    --shadow-card: 0 4px 20px -2px hsl(var(--muted) / 0.3);
+    
+    /* Animations */
+    --transition-tactical: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-glow: box-shadow 0.3s ease-in-out;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    /* Dark professional theme */
+    --background: 222 84% 4.9%;
+    --foreground: 210 40% 98%;
+
+    --card: 224 24% 9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 224 24% 9%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Navy blue primary - security/trust */
+    --primary: 221 83% 15%;
+    --primary-foreground: 210 40% 98%;
+    --primary-glow: 221 83% 25%;
+
+    /* Tactical secondary */
+    --secondary: 220 13% 18%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 215 28% 17%;
+    --muted-foreground: 217.9 20% 80%;
+
+    --accent: 216 28% 20%;
+    --accent-foreground: 210 40% 98%;
+
+    /* Tactical status colors */
+    --success: 142 71% 45%;
+    --success-foreground: 210 40% 98%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 222.2 84% 4.9%;
+    --danger: 0 84% 60%;
+    --danger-foreground: 210 40% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 215 28% 17%;
+    --input: 215 28% 17%;
+    --ring: 218 100% 25%;
+
+    /* Custom tactical design tokens - dark */
+    --tactical-blue: 217 91% 60%;
+    --tactical-green: 142 71% 45%;
+    --tactical-red: 0 84% 60%;
+    --tactical-amber: 38 92% 50%;
+    
+    /* Dark gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
+    --gradient-tactical: linear-gradient(135deg, hsl(var(--tactical-blue)), hsl(var(--accent)));
+    --gradient-status: linear-gradient(90deg, hsl(var(--tactical-green)), hsl(var(--tactical-blue)));
+    
+    /* Dark shadows with tactical glow */
+    --shadow-tactical: 0 10px 30px -10px hsl(var(--primary) / 0.3);
+    --shadow-glow: 0 0 40px hsl(var(--primary-glow) / 0.4);
+    --shadow-card: 0 4px 20px -2px hsl(var(--background) / 0.5);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    background-image: radial-gradient(circle at 25% 25%, hsl(var(--primary) / 0.05) 0%, transparent 50%),
+                      radial-gradient(circle at 75% 75%, hsl(var(--tactical-blue) / 0.05) 0%, transparent 50%);
+  }
+
+  .dark body {
+    background-image: radial-gradient(circle at 25% 25%, hsl(var(--primary) / 0.1) 0%, transparent 50%),
+                      radial-gradient(circle at 75% 75%, hsl(var(--tactical-blue) / 0.1) 0%, transparent 50%);
+  }
+}
+
+@layer components {
+  /* Tactical component styles */
+  .tactical-glow {
+    box-shadow: var(--shadow-glow);
+    transition: var(--transition-glow);
+  }
+  
+  .tactical-card {
+    background: var(--gradient-tactical);
+    border: 1px solid hsl(var(--border));
+    box-shadow: var(--shadow-card);
+    transition: var(--transition-tactical);
+  }
+  
+  .status-indicator {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .status-indicator::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+    animation: shimmer 2s infinite;
+  }
+  
+  @keyframes shimmer {
+    0% { left: -100%; }
+    50% { left: 100%; }
+    100% { left: 100%; }
+  }
+  
+  @keyframes pulse-glow {
+    0%, 100% { 
+      box-shadow: 0 0 5px hsl(var(--primary) / 0.5);
+    }
+    50% { 
+      box-shadow: 0 0 20px hsl(var(--primary) / 0.8), 0 0 30px hsl(var(--primary) / 0.6);
+    }
+  }
+  
+  .pulse-tactical {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* Full screen map controls */
+  #realtime-map:fullscreen .fullscreen-controls {
+    display: block !important;
+  }
+}
