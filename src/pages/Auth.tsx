@@ -35,13 +35,23 @@ const Auth = () => {
   // Verificar se é uma redefinição de senha ao carregar
   useEffect(() => {
     const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    const accessToken = hashParams.get('access_token');
-    const type = hashParams.get('type');
+    const urlParams = new URLSearchParams(window.location.search);
     
-    if (accessToken && type === 'recovery') {
+    // Verificar tanto hash quanto query params
+    const accessToken = hashParams.get('access_token') || urlParams.get('access_token');
+    const type = hashParams.get('type') || urlParams.get('type');
+    const error = hashParams.get('error') || urlParams.get('error');
+    
+    console.log('Auth params:', { accessToken: !!accessToken, type, error });
+    
+    if (accessToken && (type === 'recovery' || type === 'magiclink')) {
       setIsUpdatePassword(true);
       setIsLogin(false);
       setIsResetPassword(false);
+    }
+    
+    if (error) {
+      setError("Link de redefinição inválido ou expirado. Solicite um novo link.");
     }
   }, []);
 

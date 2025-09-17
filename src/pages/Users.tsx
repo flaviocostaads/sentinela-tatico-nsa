@@ -45,7 +45,16 @@ const Users = () => {
     alternativeEmail: ""
   });
   
+  const [resetPasswordData, setResetPasswordData] = useState({
+    userId: "",
+    userName: "",
+    email: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+  
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -146,27 +155,68 @@ const Users = () => {
     }
   };
 
-  const resendInvite = async (email: string) => {
+  const sendPasswordResetEmail = async (email: string) => {
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email,
-        options: {
-          shouldCreateUser: false,
-          emailRedirectTo: `${window.location.origin}/auth`
-        }
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`,
       });
 
       if (error) throw error;
 
       toast({
         title: "Sucesso",
-        description: "Link de redefinição de senha enviado!",
+        description: "Link de redefinição de senha enviado por email!",
       });
     } catch (error) {
-      console.error("Error resending invite:", error);
+      console.error("Error sending password reset email:", error);
       toast({
         title: "Erro",
         description: "Erro ao enviar link de redefinição",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const resetPasswordManually = async (userId: string, newPassword: string) => {
+    try {
+      // Get current user info for audit log
+      const { data: currentUser } = await supabase.auth.getUser();
+      const { data: currentProfile } = await supabase
+        .from("profiles")
+        .select("name")
+        .eq("user_id", currentUser.user?.id)
+        .single();
+
+      // Create edge function call to reset password
+      const { data, error } = await supabase.functions.invoke('admin-reset-password', {
+        body: { 
+          targetUserId: userId, 
+          newPassword: newPassword,
+          adminUserId: currentUser.user?.id,
+          adminName: currentProfile?.name || 'Admin'
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Sucesso", 
+        description: "Senha redefinida com sucesso!",
+      });
+
+      setResetPasswordDialogOpen(false);
+      setResetPasswordData({
+        userId: "",
+        userName: "",
+        email: "",
+        newPassword: "",
+        confirmPassword: ""
+      });
+    } catch (error) {
+      console.error("Error resetting password:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao redefinir senha. Tente novamente.",
         variant: "destructive",
       });
     }
@@ -379,6 +429,96 @@ const Users = () => {
               </DialogContent>
             </Dialog>
 
+            {/* Dialog para redefinir senha */}
+            <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Redefinir Senha - {resetPasswordData.userName}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="text-sm text-muted-foreground">
+                    Escolha como redefinir a senha para {resetPasswordData.userName}:
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <Button
+                      variant="outline"
+                      onClick={() => sendPasswordResetEmail(resetPasswordData.email)}
+                      className="h-20 flex flex-col items-center justify-center space-y-2"
+                    >
+                      <Mail className="w-6 h-6" />
+                      <span className="text-xs text-center">Enviar Link por Email</span>
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setResetPasswordDialogOpen(false);
+                        setTimeout(() => setResetPasswordDialogOpen(true), 100);
+                      }}
+                      className="h-20 flex flex-col items-center justify-center space-y-2"
+                    >
+                      <Key className="w-6 h-6" />
+                      <span className="text-xs text-center">Definir Nova Senha</span>
+                    </Button>
+                  </div>
+                  
+                  <div className="border-t pt-4 space-y-4">
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (resetPasswordData.newPassword !== resetPasswordData.confirmPassword) {
+                        toast({
+                          title: "Erro",
+                          description: "As senhas não coincidem",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      
+                      if (resetPasswordData.newPassword.length < 6) {
+                        toast({
+                          title: "Erro", 
+                          description: "A senha deve ter pelo menos 6 caracteres",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+                      
+                      await resetPasswordManually(resetPasswordData.userId, resetPasswordData.newPassword);
+                    }} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="newPassword">Nova Senha</Label>
+                        <Input
+                          id="newPassword"
+                          type="password"
+                          value={resetPasswordData.newPassword}
+                          onChange={(e) => setResetPasswordData({ ...resetPasswordData, newPassword: e.target.value })}
+                          placeholder="Digite a nova senha"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">Confirmar Nova Senha</Label>
+                        <Input
+                          id="confirmPassword"
+                          type="password"
+                          value={resetPasswordData.confirmPassword}
+                          onChange={(e) => setResetPasswordData({ ...resetPasswordData, confirmPassword: e.target.value })}
+                          placeholder="Confirme a nova senha"
+                        />
+                      </div>
+                      <Button 
+                        type="submit" 
+                        className="w-full bg-tactical-green hover:bg-tactical-green/90"
+                        disabled={!resetPasswordData.newPassword || !resetPasswordData.confirmPassword}
+                      >
+                        Redefinir Senha
+                      </Button>
+                    </form>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+
             {/* Dialog para alterar email do administrador */}
             <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
               <DialogContent>
@@ -539,7 +679,16 @@ const Users = () => {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => resendInvite(profile.email)}
+                                onClick={() => {
+                                  setResetPasswordData({
+                                    userId: profile.user_id,
+                                    userName: profile.name,
+                                    email: profile.email,
+                                    newPassword: "",
+                                    confirmPassword: ""
+                                  });
+                                  setResetPasswordDialogOpen(true);
+                                }}
                                 className="hover:bg-tactical-blue/10 hover:text-tactical-blue"
                               >
                                 <Key className="w-4 h-4 mr-1" />
