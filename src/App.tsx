@@ -75,7 +75,6 @@ const App = () => (
           <Sonner />
           <BrowserRouter>
             <EmergencyPopup />
-            <AdminEmergencyAlert />
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/" element={
