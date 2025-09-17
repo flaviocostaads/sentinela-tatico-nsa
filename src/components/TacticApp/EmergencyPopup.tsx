@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Emergency {
   id: string;
@@ -19,8 +20,15 @@ const EmergencyPopup = () => {
   const [emergencies, setEmergencies] = useState<Emergency[]>([]);
   const [lastCheckTime, setLastCheckTime] = useState<Date>(new Date());
   const { toast } = useToast();
+  const { profile } = useAuth();
+
+  // Only show alerts to admin and operador, never to tatico
+  const shouldShowAlerts = profile?.role === 'admin' || profile?.role === 'operador';
 
   useEffect(() => {
+    // Only run for admin and operador roles
+    if (!shouldShowAlerts) return;
+
     // Check for new emergencies every 10 seconds
     const interval = setInterval(() => {
       checkForNewEmergencies();
@@ -30,7 +38,7 @@ const EmergencyPopup = () => {
     checkForNewEmergencies();
 
     return () => clearInterval(interval);
-  }, []);
+  }, [shouldShowAlerts]);
 
   const checkForNewEmergencies = async () => {
     try {
@@ -121,7 +129,8 @@ const EmergencyPopup = () => {
     }
   };
 
-  if (emergencies.length === 0) return null;
+  // Don't show alerts to tatico users or if no emergencies
+  if (!shouldShowAlerts || emergencies.length === 0) return null;
 
   return (
     <div className="fixed top-4 right-4 z-[9999] space-y-2 max-w-sm">
