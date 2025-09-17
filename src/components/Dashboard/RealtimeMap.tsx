@@ -11,6 +11,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { useSecureMapbox } from "@/hooks/useSecureMapbox";
 import { useEmergencyAlert } from "@/hooks/useEmergencyAlert";
 import { useRealtimeMap } from "@/hooks/useRealtimeMap";
+import FullscreenEmergencyAlert from "./FullscreenEmergencyAlert";
 import "./EmergencyMapStyles.css";
 
 interface UserLocation {
@@ -53,6 +54,7 @@ const RealtimeMap = () => {
   const map = useRef<mapboxgl.Map | null>(null);
   const userMarkers = useRef<{ [key: string]: mapboxgl.Marker }>({});
   const [roundCheckpoints, setRoundCheckpoints] = useState<RoundCheckpoint[]>([]);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const clientMarkers = useRef<mapboxgl.Marker[]>([]);
   const checkpointMarkers = useRef<mapboxgl.Marker[]>([]);
   const { toast } = useToast();
@@ -75,6 +77,36 @@ const RealtimeMap = () => {
       initializeMap();
     }
   }, [mapboxToken]);
+
+  // Monitor fullscreen changes
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      const isCurrentlyFullscreen = !!document.fullscreenElement;
+      setIsFullscreen(isCurrentlyFullscreen);
+      
+      // Show/hide fullscreen controls
+      const controls = document.querySelector('.fullscreen-controls');
+      if (controls) {
+        if (isCurrentlyFullscreen) {
+          controls.classList.remove('hidden');
+        } else {
+          controls.classList.add('hidden');
+        }
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
 
   // Update map when locations change
   useEffect(() => {
@@ -605,13 +637,22 @@ const RealtimeMap = () => {
       </CardHeader>
       <CardContent className="p-0">
         <div id="realtime-map" ref={mapContainer} className="w-full h-[500px] rounded-lg relative">
+          {/* Emergency alerts - always visible, positioned based on fullscreen state */}
+          <FullscreenEmergencyAlert isFullscreen={isFullscreen} />
+          
           {/* Full screen controls overlay */}
-          <div className="fullscreen-controls absolute top-4 right-4 z-50 hidden bg-background/90 backdrop-blur-sm p-2 rounded-lg border">
+          <div className="fullscreen-controls absolute top-4 left-4 z-50 hidden bg-background/90 backdrop-blur-sm p-2 rounded-lg border">
             <div className="flex gap-2">
               <div className="flex items-center gap-2 bg-background/50 px-3 py-1 rounded">
                 <div className="w-2 h-2 bg-tactical-green rounded-full animate-pulse"></div>
                 <span className="text-xs text-foreground">Atualização Automática</span>
               </div>
+              {hasActiveAlert && (
+                <div className="flex items-center gap-2 bg-red-600/90 text-white px-3 py-1 rounded">
+                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                  <span className="text-xs font-bold">🚨 {activeEmergencies.length} EMERGÊNCIA(S)</span>
+                </div>
+              )}
               <Button 
                 size="sm" 
                 variant="destructive" 
