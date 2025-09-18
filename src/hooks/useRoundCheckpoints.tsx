@@ -80,6 +80,8 @@ export const useRoundCheckpoints = () => {
         .order("order_index");
 
       if (templateError) throw templateError;
+      
+      console.log("Raw template checkpoints from database:", templateCheckpoints);
 
       // Get checkpoint visits for these rounds
       const { data: visits, error: visitsError } = await supabase
@@ -94,24 +96,38 @@ export const useRoundCheckpoints = () => {
       // Format checkpoints with visit status
       const formattedCheckpoints: RoundCheckpoint[] = [];
       
-      templateCheckpoints?.forEach(tc => {
-        if (tc.clients?.lat && tc.clients?.lng) {
+      console.log("Processing template checkpoints:", templateCheckpoints?.length || 0);
+      
+      templateCheckpoints?.forEach((tc, index) => {
+        console.log(`Processing checkpoint ${index + 1}:`, tc);
+        
+        // Verificar se o cliente existe e tem coordenadas válidas
+        if (tc.clients && tc.clients.lat && tc.clients.lng) {
           const activeRound = activeRounds.find(r => r.template_id === tc.template_id);
           if (activeRound) {
             const checkpointId = `template_${tc.id}`;
-            formattedCheckpoints.push({
+            const checkpoint = {
               id: checkpointId,
               name: tc.clients.name,
-              lat: tc.clients.lat,
-              lng: tc.clients.lng,
+              lat: Number(tc.clients.lat),
+              lng: Number(tc.clients.lng),
               visited: visitedCheckpoints.has(checkpointId),
               round_id: activeRound.id,
               client_id: tc.client_id,
               order_index: tc.order_index
-            });
+            };
+            
+            console.log("Adding checkpoint to list:", checkpoint);
+            formattedCheckpoints.push(checkpoint);
+          } else {
+            console.log("No active round found for template:", tc.template_id);
           }
+        } else {
+          console.log("Checkpoint has no valid client or coordinates:", tc);
         }
       });
+      
+      console.log("Final formatted checkpoints:", formattedCheckpoints);
 
       setCheckpoints(formattedCheckpoints);
     } catch (error) {

@@ -116,6 +116,14 @@ const RealtimeMap = () => {
     }
   }, [userLocations, clients]);
 
+  // Update map when locations change
+  useEffect(() => {
+    if (map.current) {
+      updateUserLocations();
+      updateClientMarkers();
+    }
+  }, [userLocations, clients]);
+
   // Update checkpoints when user locations change (they contain active rounds)
   useEffect(() => {
     if (map.current && userLocations.length > 0) {
@@ -125,6 +133,13 @@ const RealtimeMap = () => {
       }
     }
   }, [userLocations]);
+
+  // Update map when checkpoints change
+  useEffect(() => {
+    if (map.current && roundCheckpoints.length > 0) {
+      updateRoundCheckpoints();
+    }
+  }, [roundCheckpoints]);
 
   const initializeMap = () => {
     if (!mapContainer.current || map.current) return;
@@ -486,7 +501,7 @@ const RealtimeMap = () => {
         throw templateError;
       }
 
-      console.log('Template checkpoints fetched:', templateCheckpoints);
+      console.log('Raw template checkpoints from DB:', templateCheckpoints);
 
       // Get checkpoint visits for these rounds
       const { data: visits, error: visitsError } = await supabase
@@ -501,57 +516,46 @@ const RealtimeMap = () => {
 
       console.log('Checkpoint visits:', visits);
 
-      // Get checkpoints data to map client_ids from checkpoint visits  
-      const visitedCheckpointIds = visits?.map(v => v.checkpoint_id) || [];
-      let checkpoints: any[] = [];
-      
-      if (visitedCheckpointIds.length > 0) {
-        const { data: checkpointsData, error: checkpointsError } = await supabase
-          .from("checkpoints")
-          .select("id, client_id, name")
-          .in("id", visitedCheckpointIds);
-
-        if (checkpointsError) {
-          console.error('Error fetching checkpoints:', checkpointsError);
-        } else {
-          checkpoints = checkpointsData || [];
-        }
-      }
-
-      // Create a map of client_id -> visited status from completed visits
-      const visitedByClient = new Set<string>();
-      checkpoints?.forEach(checkpoint => {
-        const visit = visits?.find(v => v.checkpoint_id === checkpoint.id);
-        if (visit) {
-          visitedByClient.add(checkpoint.client_id);
-        }
-      });
+      const visitedCheckpoints = new Set(visits?.map(v => v.checkpoint_id) || []);
 
       // Format checkpoints with visit status
       const formattedCheckpoints: RoundCheckpoint[] = [];
       
-      templateCheckpoints?.forEach(tc => {
-        if (tc.clients?.lat && tc.clients?.lng) {
+      console.log('Processing template checkpoints:', templateCheckpoints?.length || 0);
+      
+      templateCheckpoints?.forEach((tc, index) => {
+        console.log(`Processing checkpoint ${index + 1}:`, tc);
+        
+        if (tc.clients && tc.clients.lat && tc.clients.lng) {
           const activeRound = activeRounds.find(r => r.template_id === tc.template_id);
           if (activeRound) {
             const checkpointId = `template_${tc.id}`;
-            const isVisited = visitedByClient.has(tc.client_id);
-            formattedCheckpoints.push({
+            const checkpoint = {
               id: checkpointId,
               name: tc.clients.name,
-              lat: tc.clients.lat,
-              lng: tc.clients.lng,
-              visited: isVisited,
+              lat: Number(tc.clients.lat),
+              lng: Number(tc.clients.lng),
+              visited: visitedCheckpoints.has(checkpointId),
               round_id: activeRound.id,
               client_id: tc.client_id,
               order_index: tc.order_index
-            });
+            };
+            
+            console.log("Adding checkpoint to map:", checkpoint);
+            formattedCheckpoints.push(checkpoint);
+          } else {
+            console.log("No active round found for template:", tc.template_id);
           }
+        } else {
+          console.log("Checkpoint has no valid client or coordinates:", tc);
         }
       });
 
-      console.log('Processed round checkpoints:', formattedCheckpoints);
+      console.log('Final processed round checkpoints:', formattedCheckpoints);
       setRoundCheckpoints(formattedCheckpoints);
+      
+      // Update checkpoint markers on map
+      setTimeout(() => updateRoundCheckpoints(), 100);
     } catch (error) {
       console.error("Error fetching round checkpoints:", error);
       setRoundCheckpoints([]);
