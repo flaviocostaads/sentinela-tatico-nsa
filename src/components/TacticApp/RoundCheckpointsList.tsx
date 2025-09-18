@@ -52,7 +52,9 @@ const RoundCheckpointsList = ({
         .eq("active", true)
         .order("order_index");
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching checkpoints:", error);
+      }
 
       if (checkpointsData && checkpointsData.length > 0) {
         const formattedCheckpoints = checkpointsData.map(cp => ({
@@ -80,15 +82,20 @@ const RoundCheckpointsList = ({
                 clients (
                   id,
                   name,
-                  address
+                  address,
+                  lat,
+                  lng
                 )
               )
             )
           `)
           .eq("id", roundId)
-          .single();
+          .maybeSingle();
 
-        if (roundError) throw roundError;
+        if (roundError) {
+          console.error("Error fetching round data:", roundError);
+          throw roundError;
+        }
 
         if (roundData?.round_templates?.round_template_checkpoints) {
           const templateCheckpoints = roundData.round_templates.round_template_checkpoints
@@ -104,6 +111,9 @@ const RoundCheckpointsList = ({
             }));
           
           setCheckpoints(templateCheckpoints);
+        } else {
+          console.log("No checkpoints found for client:", clientId);
+          setCheckpoints([]);
         }
       }
     } catch (error) {
@@ -113,6 +123,7 @@ const RoundCheckpointsList = ({
         description: "Erro ao carregar pontos de ronda",
         variant: "destructive",
       });
+      setCheckpoints([]);
     } finally {
       setLoading(false);
     }
@@ -188,12 +199,12 @@ const RoundCheckpointsList = ({
             return (
               <Card 
                 key={checkpoint.id} 
-                className={`tactical-card transition-all cursor-pointer ${
+                className={`transition-all cursor-pointer border-2 ${
                   isCompleted 
-                    ? 'border-l-4 border-l-tactical-green bg-tactical-green/5' 
+                    ? 'border-tactical-green bg-tactical-green/10 shadow-lg' 
                     : canAccess 
-                    ? 'border-l-4 border-l-tactical-blue hover:shadow-lg' 
-                    : 'opacity-60 cursor-not-allowed'
+                    ? 'border-tactical-blue bg-tactical-blue/10 hover:shadow-lg hover:border-tactical-blue/80' 
+                    : 'border-tactical-red bg-tactical-red/10 opacity-80 cursor-not-allowed'
                 }`}
                 onClick={() => canAccess && !isCompleted && onCheckpointSelect(checkpoint.id)}
               >
@@ -202,11 +213,11 @@ const RoundCheckpointsList = ({
                     <div className="flex items-center space-x-3">
                       <div className="flex-shrink-0">
                         {isCompleted ? (
-                          <CheckCircle className="w-6 h-6 text-tactical-green" />
+                          <CheckCircle className="w-6 h-6 text-tactical-green fill-tactical-green/20" />
                         ) : canAccess ? (
                           <Circle className="w-6 h-6 text-tactical-blue" />
                         ) : (
-                          <Circle className="w-6 h-6 text-muted-foreground" />
+                          <Circle className="w-6 h-6 text-tactical-red" />
                         )}
                       </div>
                       
@@ -244,13 +255,13 @@ const RoundCheckpointsList = ({
                     
                     <div className="flex-shrink-0">
                       {isCompleted ? (
-                        <Badge className="bg-tactical-green text-white">
-                          Concluído
+                        <Badge className="bg-tactical-green hover:bg-tactical-green text-white border-tactical-green">
+                          ✓ Concluído
                         </Badge>
                       ) : canAccess ? (
                         <Button
                           size="sm"
-                          className="bg-tactical-blue hover:bg-tactical-blue/90 text-white"
+                          className="bg-tactical-blue hover:bg-tactical-blue/90 text-white border-tactical-blue shadow-lg"
                           onClick={(e) => {
                             e.stopPropagation();
                             onCheckpointSelect(checkpoint.id);
@@ -260,8 +271,8 @@ const RoundCheckpointsList = ({
                           Escanear QR
                         </Button>
                       ) : (
-                        <Badge variant="secondary">
-                          Bloqueado
+                        <Badge className="bg-tactical-red hover:bg-tactical-red text-white border-tactical-red">
+                          ⏳ Aguardando
                         </Badge>
                       )}
                     </div>

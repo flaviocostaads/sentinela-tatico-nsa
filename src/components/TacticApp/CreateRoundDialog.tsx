@@ -86,19 +86,40 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
 
   const fetchVehicles = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get user profile to check role
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('user_id', user.id)
+        .single();
+
+      if (profileError) {
+        console.error("Error fetching profile:", profileError);
+        return;
+      }
+
+      // Admin can see all vehicles, tactical users see all available vehicles
       const { data, error } = await supabase
         .from("vehicles")
         .select("id, license_plate, brand, model, type")
         .eq("active", true)
         .order("license_plate");
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching vehicles:", error);
+        throw error;
+      }
+      
+      console.log('Vehicles loaded:', data);
       setVehicles(data || []);
     } catch (error) {
       console.error("Error fetching vehicles:", error);
       toast({
         title: "Erro",
-        description: "Erro ao carregar veículos",
+        description: "Erro ao carregar veículos. Verifique as permissões.",
         variant: "destructive",
       });
     }

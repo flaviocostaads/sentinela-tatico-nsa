@@ -122,8 +122,6 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const today = new Date().toISOString().split('T')[0];
-
       const { data, error } = await supabase
         .from("rounds")
         .select(`
@@ -133,7 +131,7 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
           round_templates (name)
         `)
         .eq("user_id", user.id)
-        .gte("created_at", today + "T00:00:00.000Z")
+        .in("status", ["pending", "active", "incident"])
         .order("created_at", { ascending: false });
 
       if (error) throw error;

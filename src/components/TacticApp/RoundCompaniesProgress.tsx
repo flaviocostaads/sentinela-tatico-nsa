@@ -78,6 +78,7 @@ const RoundCompaniesProgress = ({
           start_time,
           vehicle,
           template_id,
+          client_id,
           round_templates (
             name,
             description,
@@ -90,15 +91,38 @@ const RoundCompaniesProgress = ({
               clients (
                 id,
                 name,
-                address
+                address,
+                lat,
+                lng
               )
             )
+          ),
+          clients (
+            id,
+            name,
+            address,
+            lat,
+            lng
           )
         `)
         .eq("id", roundId)
-        .single();
+        .maybeSingle();
 
-      if (roundError) throw roundError;
+      if (roundError) {
+        console.error("Error fetching round data:", roundError);
+        throw roundError;
+      }
+      
+      if (!roundData) {
+        toast({
+          title: "Erro",
+          description: "Ronda não encontrada",
+          variant: "destructive",
+        });
+        setClients([]);
+        return;
+      }
+      
       setRoundInfo(roundData);
       
       // Check if any checkpoint requires signature
@@ -109,22 +133,31 @@ const RoundCompaniesProgress = ({
       
       setRequiresSignature(templateRequiresSignature || anyCheckpointRequiresSignature);
 
-      // Processar clientes únicos do template
+      // Processar clientes únicos do template ou da ronda direta
       const clientsSet = new Set<string>();
       const clientsList: Client[] = [];
       
       if (roundData?.round_templates?.round_template_checkpoints) {
+        // Ronda baseada em template
         roundData.round_templates.round_template_checkpoints.forEach((checkpoint: any) => {
           const client = checkpoint.clients;
           
-          if (!clientsSet.has(client.id)) {
+          // Verificar se o cliente não é null antes de processar
+          if (client && client.id && !clientsSet.has(client.id)) {
             clientsSet.add(client.id);
             clientsList.push({
               id: client.id,
-              name: client.name,
-              address: client.address
+              name: client.name || 'Cliente sem nome',
+              address: client.address || 'Endereço não informado'
             });
           }
+        });
+      } else if (roundData?.clients) {
+        // Ronda direta com cliente único
+        clientsList.push({
+          id: roundData.clients.id,
+          name: roundData.clients.name,
+          address: roundData.clients.address
         });
       }
 
@@ -152,11 +185,11 @@ const RoundCompaniesProgress = ({
 
   const getClientStatus = (client: Client) => {
     if (isClientCompleted(client.id)) {
-      return { text: "Concluído", color: "bg-tactical-green" };
+      return { text: "✓ Concluído", color: "bg-tactical-green border-tactical-green text-white" };
     } else if (stats[client.id]?.completedCheckpoints > 0) {
-      return { text: "Em andamento", color: "bg-tactical-blue" };
+      return { text: "🔄 Em andamento", color: "bg-tactical-blue border-tactical-blue text-white" };
     } else {
-      return { text: "Aguardando", color: "bg-slate-500" };
+      return { text: "⏳ Aguardando", color: "bg-tactical-red border-tactical-red text-white" };
     }
   };
 
@@ -317,8 +350,14 @@ const RoundCompaniesProgress = ({
             return (
               <Card 
                 key={client.id}
-                className={`bg-slate-800 border-slate-700 transition-all cursor-pointer hover:border-slate-600 ${
-                  !canAccess ? 'opacity-60 cursor-not-allowed' : ''
+                className={`transition-all cursor-pointer border-2 ${
+                  !canAccess 
+                    ? 'bg-tactical-red/10 border-tactical-red opacity-80 cursor-not-allowed' 
+                    : isClientCompleted(client.id)
+                    ? 'bg-tactical-green/10 border-tactical-green hover:border-tactical-green/80 shadow-lg'
+                    : stats[client.id]?.completedCheckpoints > 0
+                    ? 'bg-tactical-blue/10 border-tactical-blue hover:border-tactical-blue/80 shadow-lg'
+                    : 'bg-slate-800 border-tactical-red hover:border-tactical-red/80'
                 }`}
                 onClick={() => canAccess && handleClientSelect(client)}
               >
