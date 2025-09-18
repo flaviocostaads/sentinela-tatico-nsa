@@ -66,14 +66,28 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
 
   const fetchTemplates = async () => {
     try {
+      console.log("Fetching templates...");
+      
       const { data, error } = await supabase
         .from("round_templates")
         .select("id, name, description, shift_type")
         .eq("active", true)
         .order("name");
 
+      console.log("Templates query result:", { data, error });
+
       if (error) throw error;
+      
+      console.log("Setting templates:", data);
       setTemplates(data || []);
+      
+      if (!data || data.length === 0) {
+        toast({
+          title: "Aviso",
+          description: "Nenhum template de ronda ativo encontrado",
+          variant: "default",
+        });
+      }
     } catch (error) {
       console.error("Error fetching templates:", error);
       toast({
