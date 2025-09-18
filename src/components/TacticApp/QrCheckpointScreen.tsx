@@ -78,32 +78,47 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
         .eq("id", checkpointId)
         .maybeSingle();
 
-      if (checkpointError && checkpointError.code !== 'PGRST116') throw checkpointError;
+      if (checkpointError && checkpointError.code !== 'PGRST116') {
+        console.error("Checkpoint query error:", checkpointError);
+      }
 
       if (checkpointData) {
+        console.log("Found real checkpoint:", checkpointData);
         setCheckpoint(checkpointData);
         setupChecklist(checkpointData.checklist_items as any[] || null);
       } else {
-        // Fallback: try to get from template checkpoints
+        // Fallback: try to get from template checkpoints (handle both prefixed and non-prefixed IDs)
+        console.log("No real checkpoint found, trying template checkpoints...");
+        
+        // Remove 'template_' prefix if present, otherwise use ID as-is
+        const templateId = checkpointId.startsWith('template_') 
+          ? checkpointId.replace('template_', '') 
+          : checkpointId;
+        
+        console.log("Looking for template checkpoint with ID:", templateId);
+        
         const { data: templateData, error: templateError } = await supabase
           .from("round_template_checkpoints")
           .select(`
             *,
             clients (id, name, address)
           `)
-          .eq("id", checkpointId.replace('template_', ''))
+          .eq("id", templateId)
           .maybeSingle();
 
-        if (templateError) throw templateError;
+        if (templateError) {
+          console.error("Template checkpoint query error:", templateError);
+        }
 
-        if (templateData) {
+        if (templateData && templateData.clients) {
+          console.log("Found template checkpoint:", templateData);
           const formattedData = {
             id: checkpointId,
             name: templateData.clients.name,
             description: `Checkpoint em ${templateData.clients.name}`,
             checklist_items: null,
             clients: {
-              id: templateData.clients.id || checkpointId,
+              id: templateData.clients.id || templateId,
               name: templateData.clients.name,
               address: templateData.clients.address
             },
@@ -111,6 +126,9 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
           };
           setCheckpoint(formattedData);
           setupChecklist(null);
+        } else {
+          console.error("No checkpoint or template data found for ID:", checkpointId);
+          throw new Error(`Checkpoint não encontrado: ${checkpointId}`);
         }
       }
     } catch (error) {
@@ -474,9 +492,42 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
       const location = await getCurrentLocation();
       console.log("Current location:", location);
       
-      // Create visit record with proper checkpoint ID handling
+      // For template-based rounds, we need to find the real checkpoint ID that matches this client
+      let realCheckpointId = checkpointId;
+      
+      if (checkpointId.startsWith('template_') || !checkpointId.match(/^[0-9a-f-]{36}$/)) {
+        console.log("Template checkpoint detected, finding real checkpoint...");
+        
+        // Find the real checkpoint that matches this client
+        if (checkpoint?.clients?.name) {
+          const { data: clientData } = await supabase
+            .from("clients")
+            .select("id")
+            .eq("name", checkpoint.clients.name)
+            .maybeSingle();
+          
+          if (clientData?.id) {
+            const { data: realCheckpoint } = await supabase
+              .from("checkpoints")
+              .select("id")
+              .eq("client_id", clientData.id)
+              .eq("active", true)
+              .limit(1)
+              .maybeSingle();
+            
+            if (realCheckpoint?.id) {
+              realCheckpointId = realCheckpoint.id;
+              console.log("Found real checkpoint ID:", realCheckpointId);
+            } else {
+              console.log("No real checkpoint found, using template ID");
+            }
+          }
+        }
+      }
+      
+      // Create visit record with proper checkpoint ID
       const visitData = {
-        checkpoint_id: checkpointId,
+        checkpoint_id: realCheckpointId,
         round_id: roundId,
         visit_time: new Date().toISOString(),
         duration: Math.floor(Math.random() * 300) + 60, // 1-5 minutes
