@@ -72,13 +72,6 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
     getCurrentLocation();
     checkBaseControlStatus();
     
-    // Check for QR scan result from sessionStorage
-    const qrResult = sessionStorage.getItem('qrScanResult');
-    if (qrResult) {
-      sessionStorage.removeItem('qrScanResult');
-      handleQrScan(qrResult);
-    }
-    
     // Setup location tracking for geofence
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
@@ -785,37 +778,19 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
             <CardTitle>Pontos Obrigatórios</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {checkpoints.map((checkpoint, index) => {
-              const isCurrentCheckpoint = index === currentCheckpointIndex;
-              const canAccess = hasLeftBase && canStartCheckpoints && isCurrentCheckpoint;
-              
-              return (
+            {checkpoints.map((checkpoint, index) => (
               <div 
                 key={checkpoint.id}
-                className={`flex items-center justify-between p-4 border-2 rounded-lg transition-all ${
-                  checkpoint.visited
-                    ? 'border-tactical-green bg-tactical-green/10'
-                    : canAccess
-                    ? 'border-tactical-blue bg-tactical-blue/10 shadow-lg'
-                    : 'border-tactical-red bg-tactical-red/5'
-                }`}
+                className="flex items-center justify-between p-4 border rounded-lg"
               >
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center space-x-2">
                     {checkpoint.visited ? (
-                      <CheckCircle className="w-5 h-5 text-tactical-green fill-tactical-green/20" />
-                    ) : canAccess ? (
-                      <Circle className="w-5 h-5 text-tactical-blue" />
+                      <CheckCircle className="w-5 h-5 text-tactical-green" />
                     ) : (
-                      <Circle className="w-5 h-5 text-tactical-red" />
+                      <Circle className="w-5 h-5 text-muted-foreground" />
                     )}
-                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-medium ${
-                      checkpoint.visited 
-                        ? 'bg-tactical-green text-white' 
-                        : canAccess 
-                        ? 'bg-tactical-blue text-white' 
-                        : 'bg-tactical-red text-white'
-                    }`}>
+                    <span className="w-6 h-6 bg-muted rounded-full flex items-center justify-center text-sm">
                       {index + 1}
                     </span>
                   </div>
@@ -835,28 +810,28 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
 
                 {!checkpoint.visited && (
                   <div className="flex space-x-2">
-                    {canAccess ? (
+                    {hasLeftBase && canStartCheckpoints && index === currentCheckpointIndex ? (
                       <Button
                         onClick={() => handleManualCheckin(checkpoint)}
                         size="sm"
-                        className="bg-tactical-blue hover:bg-tactical-blue/90 text-white border-tactical-blue shadow-lg"
+                        className="bg-tactical-blue hover:bg-tactical-blue/90"
                       >
                         <QrCode className="w-4 h-4 mr-2" />
                         Escanear QR
                       </Button>
                     ) : !hasLeftBase ? (
-                      <Badge className="bg-tactical-red text-white border-tactical-red">
-                        ⏳ Aguardando saída da base
+                      <Badge variant="outline" className="text-xs">
+                        Aguardando saída da base
                       </Badge>
                     ) : (
-                      <Badge className="bg-tactical-red text-white border-tactical-red">
-                        {index < currentCheckpointIndex ? '✓ Concluído' : '⏳ Aguardando'}
+                      <Badge variant="outline" className="text-xs">
+                        {index < currentCheckpointIndex ? 'Concluído' : 'Aguardando'}
                       </Badge>
                     )}
                   </div>
                 )}
               </div>
-            )})}
+            ))}
           </CardContent>
         </Card>
 
