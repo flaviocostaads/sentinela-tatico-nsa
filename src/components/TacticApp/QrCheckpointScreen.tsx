@@ -407,9 +407,11 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
           name, 
           manual_code,
           client_id,
+          active,
           clients (name)
         `)
-        .eq("manual_code", code);
+        .eq("manual_code", code)
+        .eq("active", true);
 
       if (error) {
         console.error("Database error:", error);

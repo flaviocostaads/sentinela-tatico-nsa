@@ -290,16 +290,18 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
           name, 
           manual_code,
           client_id,
-          clients!inner (
+          active,
+          clients (
             id,
             name
           )
         `)
-        .eq("manual_code", code);
+        .eq("manual_code", code)
+        .eq("active", true);
 
       if (error) {
         console.error("💥 Database error:", error);
-        return false; // Don't throw, just return false
+        return false;
       }
 
       console.log("📋 Database query result:", checkpoints);

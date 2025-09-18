@@ -92,39 +92,33 @@ export const useClientCheckpointStats = (roundId: string) => {
         const clientIds = [...new Set(templateCheckpoints.map((tc: any) => tc.client_id))];
         console.log('Client IDs from template:', clientIds);
         
-        // Get all checkpoints and visits in one efficient query per client
+        // For template-based rounds, count template checkpoints per client (not real checkpoints)
+        // because template rounds use one entry per client, not individual checkpoints
         for (const clientId of clientIds) {
-          // Get client's checkpoints
-          const { data: clientCheckpoints, error: checkpointsError } = await supabase
-            .from("checkpoints")
-            .select("id, name, active")
-            .eq("client_id", clientId)
-            .eq("active", true);
+          // Count how many template checkpoints exist for this client
+          const templateCheckpointsForClient = templateCheckpoints.filter((tc: any) => tc.client_id === clientId);
+          const totalCheckpoints = templateCheckpointsForClient.length;
+          
+          console.log(`Client ${clientId} has ${totalCheckpoints} template checkpoints`);
 
-          if (checkpointsError) {
-            console.error(`Error fetching checkpoints for client ${clientId}:`, checkpointsError);
-            continue;
-          }
-
-          const totalCheckpoints = clientCheckpoints?.length || 0;
-          console.log(`Client ${clientId} has ${totalCheckpoints} total checkpoints:`, clientCheckpoints?.map(c => c.name));
-
-          // Count completed visits for this client's checkpoints
+          // Count completed visits by matching visits to real checkpoints owned by this client
           let completedCheckpoints = 0;
-          if (clientCheckpoints && clientCheckpoints.length > 0) {
-            const checkpointIds = clientCheckpoints.map(c => c.id);
-            
-            const { data: visitCount, error: visitError } = await supabase
-              .from("checkpoint_visits")
-              .select("id", { count: 'exact' })
-              .eq("round_id", roundId)
-              .in("checkpoint_id", checkpointIds);
+          if (visits && visits.length > 0) {
+            // Get all real checkpoints for this client to match against visits
+            const { data: clientCheckpoints, error: checkpointsError } = await supabase
+              .from("checkpoints")
+              .select("id")
+              .eq("client_id", clientId)
+              .eq("active", true);
 
-            if (visitError) {
-              console.error(`Error counting visits for client ${clientId}:`, visitError);
-            } else {
-              completedCheckpoints = visitCount?.length || 0;
-              console.log(`Client ${clientId} has ${completedCheckpoints} completed checkpoints`);
+            if (!checkpointsError && clientCheckpoints) {
+              const clientCheckpointIds = clientCheckpoints.map(c => c.id);
+              // Count visits to this client's checkpoints
+              completedCheckpoints = visits.filter((visit: any) => 
+                clientCheckpointIds.includes(visit.checkpoint_id)
+              ).length;
+              
+              console.log(`Client ${clientId} has ${completedCheckpoints} completed visits out of ${totalCheckpoints}`);
             }
           }
 
