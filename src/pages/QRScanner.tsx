@@ -4,14 +4,13 @@ import { X, Camera, Flashlight, Type, Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import QrScanner from "qr-scanner";
 import { useToast } from "@/hooks/use-toast";
 
 const QRScannerPage = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const videoRef = useRef<HTMLVideoElement>(null);
-  const qrScannerRef = useRef<QrScanner | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [hasFlash, setHasFlash] = useState(false);
   const [flashOn, setFlashOn] = useState(false);
   const [error, setError] = useState<string>("");
@@ -26,7 +25,7 @@ const QRScannerPage = () => {
 
   useEffect(() => {
     checkPermissionsAndStart();
-    return () => stopScanner();
+    return () => stopCamera();
   }, []);
 
   const resetState = () => {
@@ -52,27 +51,8 @@ const QRScannerPage = () => {
         throw new Error("BROWSER_NOT_SUPPORTED");
       }
       
-      // Request camera permission explicitly first
-      console.log("Requesting camera permissions...");
-      
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      });
-      
-      // Stop the test stream immediately
-      stream.getTracks().forEach(track => track.stop());
-      
-      console.log("Camera permission granted, initializing scanner...");
-      setHasPermission(true);
-      
-      // Small delay to ensure state is updated
-      setTimeout(() => {
-        startScanner();
-      }, 100);
+      console.log("Starting camera...");
+      await startCamera();
       
     } catch (error: any) {
       console.error("Camera initialization failed:", error);
@@ -99,57 +79,78 @@ const QRScannerPage = () => {
     }
   };
 
-  const startScanner = async () => {
+  const startCamera = async () => {
     if (!videoRef.current) return;
 
     try {
-      console.log("Starting QR Scanner...");
+      console.log("Starting camera...");
       
-      // Ensure video element is properly setup
-      const video = videoRef.current;
-      video.setAttribute('playsinline', 'true');
-      video.setAttribute('webkit-playsinline', 'true');
-      video.muted = true;
-      
-      // Create QrScanner with improved mobile configuration
-      qrScannerRef.current = new QrScanner(
-        video,
-        (result) => {
-          console.log("QR Scanner result:", result);
-          handleScanResult(result.data);
-        },
-        {
-          returnDetailedScanResult: true,
-          highlightScanRegion: true,
-          highlightCodeOutline: true,
-          preferredCamera: 'environment',
-          maxScansPerSecond: 5,
-          calculateScanRegion: (video) => {
-            const smallestDimension = Math.min(video.videoWidth, video.videoHeight);
-            const scanRegionSize = Math.round(smallestDimension * 0.7);
-            const x = Math.round((video.videoWidth - scanRegionSize) / 2);
-            const y = Math.round((video.videoHeight - scanRegionSize) / 2);
-            return {
-              x,
-              y,
-              width: scanRegionSize,
-              height: scanRegionSize
-            };
-          }
-        }
-      );
+      const configs = [
+        { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
+        { facingMode: "environment" },
+        { video: true }
+      ];
 
-      console.log("QrScanner instance created, starting...");
-      await qrScannerRef.current.start();
+      let stream: MediaStream | null = null;
       
-      console.log("QR Scanner started successfully");
-      setError(""); // Clear any previous errors
+      for (let attempt = 0; attempt < configs.length; attempt++) {
+        try {
+          console.log(`Camera attempt ${attempt + 1} with config:`, configs[attempt]);
+          
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: configs[attempt]
+          });
+          
+          break; // Success, exit the retry loop
+          
+        } catch (attemptError) {
+          console.error(`Camera attempt ${attempt + 1} failed:`, attemptError);
+          
+          if (attempt === configs.length - 1) {
+            throw attemptError; // Last attempt failed
+          }
+          
+          // Wait before next attempt
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      if (!stream) {
+        throw new Error("Failed to get camera stream");
+      }
+
+      streamRef.current = stream;
       
-      // Check for flash after scanner is started
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        
+        // Wait for video to be ready
+        await new Promise((resolve, reject) => {
+          if (videoRef.current) {
+            videoRef.current.onloadedmetadata = () => {
+              if (videoRef.current) {
+                videoRef.current.play()
+                  .then(resolve)
+                  .catch(reject);
+              }
+            };
+            videoRef.current.onerror = reject;
+          }
+        });
+      }
+      
+      console.log("Camera started successfully");
+      setHasPermission(true);
+      setError("");
+
+      // Check for flash capability
       setTimeout(() => {
-        if (qrScannerRef.current) {
+        if (stream) {
+          const track = stream.getVideoTracks()[0];
           try {
-            if (qrScannerRef.current.hasFlash()) {
+            const capabilities = track.getCapabilities() as any;
+            if (capabilities?.torch) {
               setHasFlash(true);
               console.log("Flash available");
             } else {
@@ -159,11 +160,11 @@ const QRScannerPage = () => {
             console.log("Flash check error:", e);
           }
         }
-      }, 1500);
+      }, 1000);
       
     } catch (error: any) {
-      console.error("QR Scanner start error:", error);
-      let errorMessage = "Erro ao iniciar o scanner. Use o código manual.";
+      console.error("Camera start error:", error);
+      let errorMessage = "Erro ao iniciar a câmera. Use o código manual.";
       
       if (error.name === 'NotAllowedError') {
         errorMessage = "Permissão de câmera negada. Permita o acesso à câmera e tente novamente.";
@@ -175,14 +176,14 @@ const QRScannerPage = () => {
       
       setError(errorMessage);
       setShowManualInput(true);
+      throw error;
     }
   };
 
-  const stopScanner = () => {
-    if (qrScannerRef.current) {
-      qrScannerRef.current.stop();
-      qrScannerRef.current.destroy();
-      qrScannerRef.current = null;
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
     setFlashOn(false);
   };
@@ -227,14 +228,16 @@ const QRScannerPage = () => {
   };
 
   const toggleFlash = async () => {
-    if (qrScannerRef.current && hasFlash) {
+    if (streamRef.current && hasFlash) {
+      const track = streamRef.current.getVideoTracks()[0];
       try {
-        if (flashOn) {
-          await qrScannerRef.current.turnFlashOff();
-        } else {
-          await qrScannerRef.current.turnFlashOn();
+        const capabilities = track.getCapabilities() as any;
+        if (capabilities?.torch) {
+          await track.applyConstraints({
+            advanced: [{ torch: !flashOn } as any]
+          });
+          setFlashOn(!flashOn);
         }
-        setFlashOn(!flashOn);
       } catch (err) {
         console.error("Error toggling flash:", err);
       }
@@ -410,7 +413,7 @@ const QRScannerPage = () => {
               </div>
               
               <p className="text-xs text-center text-white/70">
-                Posicione o QR code da {expectedCompany} dentro do quadrado
+                Posicione o QR code da {expectedCompany} dentro do quadrado para escanear manualmente ou use o botão Manual
               </p>
             </div>
           </>

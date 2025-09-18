@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import QrScanner from "qr-scanner";
 import { useToast } from "@/hooks/use-toast";
 
 interface ImprovedQrScannerProps {
@@ -16,7 +15,7 @@ interface ImprovedQrScannerProps {
 
 const ImprovedQrScanner = ({ open, onClose, onScan, expectedCompany = "Cliente" }: ImprovedQrScannerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const qrScannerRef = useRef<QrScanner | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [hasFlash, setHasFlash] = useState(false);
   const [flashOn, setFlashOn] = useState(false);
   const [error, setError] = useState<string>("");
@@ -24,19 +23,17 @@ const ImprovedQrScanner = ({ open, onClose, onScan, expectedCompany = "Cliente" 
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [manualCode, setManualCode] = useState("");
   const [showManualInput, setShowManualInput] = useState(false);
-  const [odometerReading, setOdometerReading] = useState("");
-  const [photoTaken, setPhotoTaken] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     if (open) {
       checkPermissionsAndStart();
     } else {
-      stopScanner();
+      stopCamera();
       resetState();
     }
 
-    return () => stopScanner();
+    return () => stopCamera();
   }, [open]);
 
   const resetState = () => {
@@ -59,37 +56,8 @@ const ImprovedQrScanner = ({ open, onClose, onScan, expectedCompany = "Cliente" 
         throw new Error("BROWSER_NOT_SUPPORTED");
       }
 
-      console.log("Checking camera permissions...");
-      
-      // Check permission status first
-      try {
-        const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
-        console.log("Permission status:", permissionStatus.state);
-        
-        if (permissionStatus.state === 'denied') {
-          throw new Error("PERMISSION_DENIED");
-        }
-      } catch (permError) {
-        console.log("Permission API not supported, proceeding with getUserMedia");
-      }
-
-      // Request camera access to test permission
-      const testStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { 
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        } 
-      });
-      
-      // Stop the test stream immediately
-      testStream.getTracks().forEach(track => track.stop());
-      
-      console.log("Camera permission granted");
-      setHasPermission(true);
-      
-      // Start the actual scanner after permission is confirmed
-      await startScanner();
+      console.log("Starting camera...");
+      await startCamera();
       
     } catch (error: any) {
       console.error("Permission check failed:", error);
@@ -113,80 +81,104 @@ const ImprovedQrScanner = ({ open, onClose, onScan, expectedCompany = "Cliente" 
     }
   };
 
-  const startScanner = async () => {
-    if (!videoRef.current || !hasPermission) return;
+  const startCamera = async () => {
+    if (!videoRef.current) return;
 
     try {
-      console.log("Starting QR Scanner...");
+      console.log("Starting camera...");
       
-      // First, get the camera stream and set it to the video element
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+      const configs = [
+        { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        { facingMode: "environment", width: { ideal: 640 }, height: { ideal: 480 } },
+        { facingMode: "environment" },
+        { video: true }
+      ];
+
+      let stream: MediaStream | null = null;
+      
+      for (let attempt = 0; attempt < configs.length; attempt++) {
+        try {          
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: configs[attempt]
+          });
+          
+          break; // Success, exit the retry loop
+          
+        } catch (attemptError) {          
+          if (attempt === configs.length - 1) {
+            throw attemptError; // Last attempt failed
+          }
+          
+          // Wait before next attempt
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
-      });
+      }
+
+      if (!stream) {
+        throw new Error("Failed to get camera stream");
+      }
+
+      streamRef.current = stream;
       
-      // Set the stream to the video element
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        
+        await new Promise((resolve, reject) => {
+          if (videoRef.current) {
+            videoRef.current.onloadedmetadata = () => {
+              if (videoRef.current) {
+                videoRef.current.play()
+                  .then(resolve)
+                  .catch(reject);
+              }
+            };
+            videoRef.current.onerror = reject;
+          }
+        });
       }
       
-      console.log("Camera stream started");
-      
-      // Create QR Scanner with optimized settings
-      qrScannerRef.current = new QrScanner(
-        videoRef.current,
-        (result) => handleScanResult(result.data),
-        {
-          returnDetailedScanResult: true,
-          highlightScanRegion: true,
-          highlightCodeOutline: true,
-          preferredCamera: 'environment',
-          maxScansPerSecond: 3,
-          calculateScanRegion: (video) => {
-            const smallestDimension = Math.min(video.videoWidth, video.videoHeight);
-            const scanRegionSize = Math.round(smallestDimension * 0.6);
-            const x = Math.round((video.videoWidth - scanRegionSize) / 2);
-            const y = Math.round((video.videoHeight - scanRegionSize) / 2);
-            return { x, y, width: scanRegionSize, height: scanRegionSize };
-          }
-        }
-      );
+      console.log("Camera started successfully");
+      setHasPermission(true);
+      setError("");
 
-      // Start the scanner
-      await qrScannerRef.current.start();
-      
-      console.log("QR Scanner started successfully");
-      
-      // Check flash capability after successful start
+      // Check for flash capability
       setTimeout(() => {
-        if (qrScannerRef.current) {
+        if (stream) {
+          const track = stream.getVideoTracks()[0];
           try {
-            if (qrScannerRef.current.hasFlash()) {
+            const capabilities = track.getCapabilities() as any;
+            if (capabilities?.torch) {
               setHasFlash(true);
-              console.log("Flash available");
             }
           } catch (e) {
-            console.log("Flash check error:", e);
+            // Flash not available
           }
         }
       }, 1000);
       
     } catch (error: any) {
-      console.error("QR Scanner start error:", error);
-      setError("Erro ao iniciar o scanner. Use o código manual.");
+      console.error("Camera start error:", error);
+      
+      let errorMessage = "Erro ao iniciar a câmera. Use o código manual.";
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage = "Permissão de câmera negada.";
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = "Câmera não encontrada.";
+      } else if (error.name === 'NotReadableError') {
+        errorMessage = "Câmera em uso por outro aplicativo.";
+      }
+      
+      setError(errorMessage);
       setShowManualInput(true);
+      throw error;
     }
   };
 
-  const stopScanner = () => {
-    if (qrScannerRef.current) {
-      qrScannerRef.current.stop();
-      qrScannerRef.current.destroy();
-      qrScannerRef.current = null;
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
     setFlashOn(false);
   };
@@ -231,14 +223,16 @@ const ImprovedQrScanner = ({ open, onClose, onScan, expectedCompany = "Cliente" 
   };
 
   const toggleFlash = async () => {
-    if (qrScannerRef.current && hasFlash) {
+    if (streamRef.current && hasFlash) {
+      const track = streamRef.current.getVideoTracks()[0];
       try {
-        if (flashOn) {
-          await qrScannerRef.current.turnFlashOff();
-        } else {
-          await qrScannerRef.current.turnFlashOn();
+        const capabilities = track.getCapabilities() as any;
+        if (capabilities?.torch) {
+          await track.applyConstraints({
+            advanced: [{ torch: !flashOn } as any]
+          });
+          setFlashOn(!flashOn);
         }
-        setFlashOn(!flashOn);
       } catch (err) {
         console.error("Error toggling flash:", err);
       }
@@ -268,32 +262,6 @@ const ImprovedQrScanner = ({ open, onClose, onScan, expectedCompany = "Cliente" 
     // Always accept 9-digit codes for manual input
     onScan(manualCode);
     onClose();
-  };
-
-  const takePhoto = () => {
-    // Simulate photo taking
-    setPhotoTaken(true);
-    toast({
-      title: "Foto capturada",
-      description: "Foto do odômetro registrada com sucesso",
-    });
-  };
-
-  const saveOdometerReading = () => {
-    if (!odometerReading.trim()) {
-      toast({
-        title: "Odômetro necessário",
-        description: "Digite a leitura atual do odômetro",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Save odometer reading logic here
-    toast({
-      title: "Odômetro registrado",
-      description: `Leitura ${odometerReading} km registrada`,
-    });
   };
 
   return (
@@ -340,8 +308,6 @@ const ImprovedQrScanner = ({ open, onClose, onScan, expectedCompany = "Cliente" 
                   maxLength={9}
                 />
               </div>
-              
-              {/* Removed odometer requirement for manual input */}
 
               <div className="flex space-x-2">
                 <Button onClick={() => setShowManualInput(false)} variant="outline" className="flex-1">
@@ -405,7 +371,7 @@ const ImprovedQrScanner = ({ open, onClose, onScan, expectedCompany = "Cliente" 
             </div>
             
             <p className="text-xs text-center text-muted-foreground">
-              Posicione o QR code da {expectedCompany} dentro do quadrado para escanear
+              Posicione o QR code da {expectedCompany} dentro do quadrado para escanear manualmente ou use o botão Manual
             </p>
           </div>
         )}
