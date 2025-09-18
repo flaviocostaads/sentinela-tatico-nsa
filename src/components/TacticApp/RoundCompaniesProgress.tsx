@@ -142,12 +142,13 @@ const RoundCompaniesProgress = ({
         roundData.round_templates.round_template_checkpoints.forEach((checkpoint: any) => {
           const client = checkpoint.clients;
           
-          if (!clientsSet.has(client.id)) {
+          // Verificar se o cliente não é null antes de processar
+          if (client && client.id && !clientsSet.has(client.id)) {
             clientsSet.add(client.id);
             clientsList.push({
               id: client.id,
-              name: client.name,
-              address: client.address
+              name: client.name || 'Cliente sem nome',
+              address: client.address || 'Endereço não informado'
             });
           }
         });
