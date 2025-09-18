@@ -292,65 +292,74 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
   };
 
   const handleQrScan = (qrCode: string) => {
+    console.log("=== QR Scan Handler in TacticRoundDetail ===");
     console.log("QR Code received:", qrCode);
+    console.log("Current checkpoint index:", currentCheckpointIndex);
+    console.log("Available checkpoints:", checkpoints.length);
     
-    // Try to parse as JSON first (new format)
+    // Validate QR code format first
+    let isValidFormat = false;
+    let validationMessage = "";
+
+    // Try to parse as JSON first (structured QR code)
     try {
       const parsed = JSON.parse(qrCode);
       if (parsed.type === 'checkpoint') {
-        // Valid checkpoint QR code - proceed with checkpoint completion
-        toast({
-          title: "QR Code válido",
-          description: `Código de ${parsed.company} - ${parsed.checkpoint} validado`,
-        });
-        
-        // Find the current checkpoint to complete
-        const currentCheckpoint = checkpoints[currentCheckpointIndex];
-        if (currentCheckpoint && !currentCheckpoint.visited) {
-        setSelectedCheckpoint(currentCheckpoint);
-        setChecklistDialogOpen(true);
-      } else {
-        toast({
-          title: "Checkpoint já visitado",
-          description: "Este checkpoint já foi concluído",
-          variant: "destructive",
-        });
-      }
-      return;
+        isValidFormat = true;
+        validationMessage = `QR Code estruturado: ${parsed.company || 'N/A'}`;
       }
     } catch (e) {
-      // Not JSON, could be manual code
+      // Not JSON, check if it's a 9-digit manual code
+      if (/^\d{9}$/.test(qrCode)) {
+        isValidFormat = true;
+        validationMessage = `Código manual de 9 dígitos: ${qrCode}`;
+      }
     }
 
-    // Check if it's a 9-digit manual code
-    if (/^\d{9}$/.test(qrCode)) {
-      // Valid manual code - proceed with checkpoint completion
+    if (!isValidFormat) {
+      console.log("❌ Invalid QR format:", qrCode);
       toast({
-        title: "Código manual válido",
-        description: `Código ${qrCode} validado`,
+        title: "QR Code inválido",
+        description: "Formato não reconhecido. Use um QR code válido ou código de 9 dígitos.",
+        variant: "destructive",
       });
-      
-      // Find the current checkpoint to complete
-      const currentCheckpoint = checkpoints[currentCheckpointIndex];
-      if (currentCheckpoint && !currentCheckpoint.visited) {
-        setSelectedCheckpoint(currentCheckpoint);
-        setChecklistDialogOpen(true);
-      } else {
-        toast({
-          title: "Checkpoint já visitado",
-          description: "Este checkpoint já foi concluído",
-          variant: "destructive",
-        });
-      }
       return;
     }
 
-    // Invalid QR code format
+    console.log("✅ QR format valid:", validationMessage);
+
+    // Find the current checkpoint to complete
+    const currentCheckpoint = checkpoints[currentCheckpointIndex];
+    
+    if (!currentCheckpoint) {
+      console.log("❌ No current checkpoint available");
+      toast({
+        title: "Nenhum checkpoint ativo",
+        description: "Não há checkpoint disponível para completar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (currentCheckpoint.visited) {
+      console.log("❌ Current checkpoint already visited");
+      toast({
+        title: "Checkpoint já visitado",
+        description: "Este checkpoint já foi concluído. Prossiga para o próximo.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    console.log("✅ Proceeding with checkpoint completion:", currentCheckpoint.name);
+    
     toast({
-      title: "QR Code inválido",
-      description: "Este QR code não corresponde a nenhum checkpoint desta ronda",
-      variant: "destructive",
+      title: "QR Code válido",
+      description: validationMessage,
     });
+    
+    setSelectedCheckpoint(currentCheckpoint);
+    setChecklistDialogOpen(true);
   };
 
   const handleChecklistComplete = async (photo: string | null, observations: string, checklist: any[]) => {

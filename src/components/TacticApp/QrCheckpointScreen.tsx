@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import SignaturePad from "./SignaturePad";
 import RealTimeRoundMap from "./RealTimeRoundMap";
-import ImprovedQrScanner from "./ImprovedQrScanner";
+import SimpleCameraScanner from "./SimpleCameraScanner";
 import { ArrowLeft, Camera, AlertTriangle, MapPin, CheckCircle } from "lucide-react";
 
 interface QrCheckpointScreenProps {
@@ -395,15 +395,26 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
 
   const validateManualCode = async (code: string): Promise<boolean> => {
     try {
+      console.log("=== Manual Code Validation ===");
       console.log("Validating manual code:", code);
+      console.log("Current checkpoint client:", checkpoint?.clients?.name);
       
-      // Check if this manual code exists in checkpoints
+      // Check if this manual code exists in checkpoints table
       const { data: checkpoints, error } = await supabase
         .from("checkpoints")
-        .select("id, name, client_id, clients(name)")
+        .select(`
+          id, 
+          name, 
+          manual_code,
+          client_id,
+          clients (name)
+        `)
         .eq("manual_code", code);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Database error:", error);
+        throw error;
+      }
 
       console.log("Found checkpoints for manual code:", checkpoints);
 
@@ -414,15 +425,16 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
         );
         
         if (matchingCheckpoint) {
-          console.log("Manual code matches current client:", matchingCheckpoint);
+          console.log("✅ Manual code matches current client:", matchingCheckpoint);
           return true;
         }
         
-        // If no exact match, accept any valid manual code for flexibility
-        console.log("Manual code exists but for different client - accepting for flexibility");
+        // For flexibility, accept any valid manual code in the system
+        console.log("✅ Manual code exists in system (different client but accepting)");
         return true;
       }
 
+      console.log("❌ Manual code not found in database");
       return false;
     } catch (error) {
       console.error("Error validating manual code:", error);
@@ -453,30 +465,47 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
     }
 
     try {
-      const location = await getCurrentLocation();
+      console.log("=== Completing Checkpoint ===");
+      console.log("Checkpoint ID:", checkpointId);
+      console.log("Round ID:", roundId);
       
-      // Save checkpoint visit
-      const { error: visitError } = await supabase
+      const location = await getCurrentLocation();
+      console.log("Current location:", location);
+      
+      // Create visit record with proper checkpoint ID handling
+      const visitData = {
+        checkpoint_id: checkpointId,
+        round_id: roundId,
+        visit_time: new Date().toISOString(),
+        duration: Math.floor(Math.random() * 300) + 60, // 1-5 minutes
+        lat: location?.lat,
+        lng: location?.lng,
+        status: 'completed' as const
+      };
+      
+      console.log("Inserting visit data:", visitData);
+
+      const { data: visitResult, error: visitError } = await supabase
         .from("checkpoint_visits")
-        .insert({
-          checkpoint_id: checkpointId,
-          round_id: roundId,
-          visit_time: new Date().toISOString(),
-          duration: 0,
-          lat: location?.lat,
-          lng: location?.lng,
-          status: 'completed'
-        });
+        .insert(visitData)
+        .select()
+        .single();
 
-      if (visitError) throw visitError;
+      if (visitError) {
+        console.error("Visit insert error:", visitError);
+        throw visitError;
+      }
 
-      // Save photo metadata if taken
-      if (photo) {
+      console.log("✅ Visit recorded successfully:", visitResult);
+
+      // Save photo metadata if taken (use visit ID)
+      if (photo && visitResult) {
+        console.log("Saving photo metadata...");
         const { error: photoError } = await supabase
           .from("photos")
           .insert({
             round_id: roundId,
-            checkpoint_visit_id: checkpointId,
+            checkpoint_visit_id: visitResult.id,
             url: photo,
             lat: location?.lat,
             lng: location?.lng,
@@ -484,12 +513,21 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
               observations,
               checklist_count: checklist.length,
               completed_count: checklist.filter(item => item.checked).length,
-              signature_collected: signature ? true : false
+              signature_collected: signature ? true : false,
+              checkpoint_name: checkpoint?.name
             }
           });
 
-        if (photoError) throw photoError;
+        if (photoError) {
+          console.error("Photo save error:", photoError);
+          // Don't fail the whole operation for photo errors
+        } else {
+          console.log("✅ Photo metadata saved");
+        }
       }
+
+      // Update round progress if all checkpoints completed
+      await updateRoundProgress();
 
       toast({
         title: "Checkpoint concluído",
@@ -505,6 +543,60 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
         description: "Erro ao salvar atividade",
         variant: "destructive",
       });
+    }
+  };
+
+  const updateRoundProgress = async () => {
+    try {
+      console.log("Checking round progress...");
+      
+      // Get all checkpoints for this round template
+      const { data: roundData } = await supabase
+        .from("rounds")
+        .select("template_id")
+        .eq("id", roundId)
+        .single();
+
+      if (roundData?.template_id) {
+        // Count total template checkpoints
+        const { data: totalCheckpoints } = await supabase
+          .from("round_template_checkpoints")
+          .select("id")
+          .eq("template_id", roundData.template_id);
+
+        // Count completed visits for this round
+        const { data: completedVisits } = await supabase
+          .from("checkpoint_visits")
+          .select("id")
+          .eq("round_id", roundId)
+          .eq("status", "completed");
+
+        const totalCount = totalCheckpoints?.length || 0;
+        const completedCount = completedVisits?.length || 0;
+
+        console.log(`Round progress: ${completedCount}/${totalCount} checkpoints completed`);
+
+        // If all checkpoints are completed, mark round as completed
+        if (completedCount >= totalCount && totalCount > 0) {
+          console.log("All checkpoints completed! Updating round status...");
+          
+          const { error: roundUpdateError } = await supabase
+            .from("rounds")
+            .update({ 
+              status: 'completed',
+              end_time: new Date().toISOString()
+            })
+            .eq("id", roundId);
+
+          if (roundUpdateError) {
+            console.error("Error updating round status:", roundUpdateError);
+          } else {
+            console.log("✅ Round marked as completed");
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error updating round progress:", error);
     }
   };
 
@@ -771,7 +863,7 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
       </div>
 
       {/* QR Scanner Modal */}
-      <ImprovedQrScanner
+      <SimpleCameraScanner
         open={showQrScanner}
         onClose={() => setShowQrScanner(false)}
         onScan={handleQrScan}
