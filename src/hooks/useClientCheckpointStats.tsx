@@ -82,27 +82,41 @@ export const useClientCheckpointStats = (roundId: string) => {
       
       console.log("Checkpoint visits for stats:", visits);
 
-      // Calculate stats per client - count template checkpoints per client
+      // Calculate stats per client - count actual checkpoints per client
       const clientStats: ClientStats = {};
 
       if (templateCheckpoints.length > 0) {
         console.log('Processing template checkpoints for stats:', templateCheckpoints);
         
-        // First, count total checkpoints per client from the template
-        templateCheckpoints.forEach((templateCheckpoint: any) => {
-          const clientId = templateCheckpoint.client_id;
-          
-          if (!clientStats[clientId]) {
+        // Get unique client IDs from template
+        const clientIds = [...new Set(templateCheckpoints.map((tc: any) => tc.client_id))];
+        
+        // For each client, count their actual checkpoints from the checkpoints table
+        for (const clientId of clientIds) {
+          const { data: clientCheckpoints, error: checkpointsError } = await supabase
+            .from("checkpoints")
+            .select("id, name, active")
+            .eq("client_id", clientId)
+            .eq("active", true);
+
+          if (!checkpointsError && clientCheckpoints) {
             clientStats[clientId] = {
-              totalCheckpoints: 0,
+              totalCheckpoints: clientCheckpoints.length,
+              completedCheckpoints: 0
+            };
+            console.log(`Client ${clientId} has ${clientCheckpoints.length} checkpoints:`, clientCheckpoints.map(c => c.name));
+          } else {
+            console.error(`Error fetching checkpoints for client ${clientId}:`, checkpointsError);
+            // Fallback to template count
+            const templateCount = templateCheckpoints.filter((tc: any) => tc.client_id === clientId).length;
+            clientStats[clientId] = {
+              totalCheckpoints: templateCount,
               completedCheckpoints: 0
             };
           }
-          
-          clientStats[clientId].totalCheckpoints += 1;
-        });
+        }
 
-        console.log('Total checkpoints per client (from template):', clientStats);
+        console.log('Total checkpoints per client (from actual checkpoints):', clientStats);
 
         // Now count completed checkpoints based on actual visits
         // For template-based rounds, visits have checkpoint_id format: "template_{template_checkpoint_id}"

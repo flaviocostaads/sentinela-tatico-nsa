@@ -31,13 +31,14 @@ const QrPrintModel: React.FC<QrPrintModelProps> = ({
   // Save manual code to database for validation
   const saveManualCodeToDatabase = async (manualCode: string, qrData: string) => {
     try {
-      console.log("Saving manual code for:", { pointName, manualCode });
+      console.log("Saving manual code for checkpoint:", { companyName, pointName, manualCode });
       
-      // First try to find checkpoint by client name since pointName is the client name
+      // The pointName is actually the checkpoint name, and companyName is the client name
+      // Find the client first by company name
       const { data: client, error: clientError } = await supabase
         .from("clients")
         .select("id, name")
-        .ilike("name", `%${pointName.replace(/[%_]/g, '\\$&')}%`)
+        .ilike("name", `%${companyName.replace(/[%_]/g, '\\$&')}%`)
         .single();
 
       if (clientError) {
@@ -46,12 +47,12 @@ const QrPrintModel: React.FC<QrPrintModelProps> = ({
       }
 
       if (client) {
-        // Find checkpoints for this client
+        // Find the specific checkpoint by client_id and checkpoint name (pointName)
         const { data: checkpoints, error } = await supabase
           .from("checkpoints")
           .select("*")
           .eq("client_id", client.id)
-          .limit(1);
+          .ilike("name", `%${pointName.replace(/[%_]/g, '\\$&')}%`);
 
         if (error) {
           console.error("Error finding checkpoint:", error);
@@ -59,7 +60,7 @@ const QrPrintModel: React.FC<QrPrintModelProps> = ({
         }
 
         if (checkpoints && checkpoints.length > 0) {
-          // Update the checkpoint with the manual code
+          // Update the specific checkpoint with the manual code
           const { error: updateError } = await supabase
             .from("checkpoints")
             .update({ 
@@ -71,10 +72,10 @@ const QrPrintModel: React.FC<QrPrintModelProps> = ({
           if (updateError) {
             console.error("Error updating checkpoint:", updateError);
           } else {
-            console.log("Manual code saved to checkpoint:", manualCode, "for client:", client.name);
+            console.log("Manual code saved to checkpoint:", manualCode, "for checkpoint:", pointName, "in client:", client.name);
           }
         } else {
-          console.log("No checkpoints found for client:", client.name);
+          console.log("No checkpoint found with name:", pointName, "for client:", client.name);
         }
       }
     } catch (error) {
@@ -113,13 +114,13 @@ const QrPrintModel: React.FC<QrPrintModelProps> = ({
 
   const loadExistingOrGenerateQRCode = async () => {
     try {
-      console.log("Loading QR code for client:", pointName);
+      console.log("Loading QR code for checkpoint:", pointName, "in company:", companyName);
       
-      // First find the client by name
+      // Find the client by company name
       const { data: client, error: clientError } = await supabase
         .from("clients")
         .select("id, name")
-        .ilike("name", `%${pointName.replace(/[%_]/g, '\\$&')}%`)
+        .ilike("name", `%${companyName.replace(/[%_]/g, '\\$&')}%`)
         .single();
 
       if (clientError) {
@@ -129,12 +130,12 @@ const QrPrintModel: React.FC<QrPrintModelProps> = ({
       }
 
       if (client) {
-        // Find checkpoints for this client
+        // Find the specific checkpoint by client_id and checkpoint name
         const { data: checkpoints } = await supabase
           .from("checkpoints")
           .select("*")
           .eq("client_id", client.id)
-          .limit(1);
+          .ilike("name", `%${pointName.replace(/[%_]/g, '\\$&')}%`);
 
         if (checkpoints && checkpoints.length > 0 && checkpoints[0].manual_code && checkpoints[0].qr_code) {
           // Use existing QR code and manual code
@@ -160,7 +161,7 @@ const QrPrintModel: React.FC<QrPrintModelProps> = ({
           });
         } else {
           // Generate new QR code
-          console.log("No existing QR code found, generating new one");
+          console.log("No existing QR code found for checkpoint:", pointName, "generating new one");
           generateNewQRCode();
         }
       } else {
