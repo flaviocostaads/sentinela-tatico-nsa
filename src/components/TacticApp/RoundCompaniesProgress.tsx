@@ -82,20 +82,7 @@ const RoundCompaniesProgress = ({
           round_templates (
             name,
             description,
-            requires_signature,
-            round_template_checkpoints (
-              id,
-              client_id,
-              order_index,
-              required_signature,
-              clients (
-                id,
-                name,
-                address,
-                lat,
-                lng
-              )
-            )
+            requires_signature
           ),
           clients (
             id,
@@ -122,15 +109,59 @@ const RoundCompaniesProgress = ({
         setClients([]);
         return;
       }
+
+      // Buscar checkpoints do template separadamente se existir template_id
+      let templateCheckpoints = [];
+      if (roundData.template_id) {
+        const { data: checkpointsData, error: checkpointsError } = await supabase
+          .from("round_template_checkpoints")
+          .select(`
+            id,
+            client_id,
+            order_index,
+            required_signature,
+            clients (
+              id,
+              name,
+              address,
+              lat,
+              lng
+            )
+          `)
+          .eq("template_id", roundData.template_id)
+          .order("order_index");
+
+        if (checkpointsError) {
+          console.error("Error fetching template checkpoints:", checkpointsError);
+        } else {
+          templateCheckpoints = checkpointsData || [];
+        }
+      }
+
+      if (roundError) {
+        console.error("Error fetching round data:", roundError);
+        throw roundError;
+      }
+      
+      if (!roundData) {
+        toast({
+          title: "Erro",
+          description: "Ronda não encontrada",
+          variant: "destructive",
+        });
+        setClients([]);
+        return;
+      }
       
       console.log("Round data fetched:", roundData);
+      console.log("Template checkpoints fetched:", templateCheckpoints);
       setRoundInfo(roundData);
       
       // Check if any checkpoint requires signature
       const templateRequiresSignature = roundData?.round_templates?.requires_signature || false;
-      const anyCheckpointRequiresSignature = roundData?.round_templates?.round_template_checkpoints?.some(
+      const anyCheckpointRequiresSignature = templateCheckpoints.some(
         (checkpoint: any) => checkpoint.required_signature
-      ) || false;
+      );
       
       setRequiresSignature(templateRequiresSignature || anyCheckpointRequiresSignature);
 
@@ -138,11 +169,11 @@ const RoundCompaniesProgress = ({
       const clientsSet = new Set<string>();
       const clientsList: Client[] = [];
       
-      if (roundData?.round_templates?.round_template_checkpoints) {
-        console.log("Processing template checkpoints:", roundData.round_templates.round_template_checkpoints);
+      if (templateCheckpoints.length > 0) {
+        console.log("Processing template checkpoints:", templateCheckpoints);
         
         // Ronda baseada em template
-        roundData.round_templates.round_template_checkpoints.forEach((checkpoint: any) => {
+        templateCheckpoints.forEach((checkpoint: any) => {
           const client = checkpoint.clients;
           
           console.log("Processing checkpoint:", checkpoint, "Client:", client);
