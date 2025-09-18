@@ -155,6 +155,17 @@ const RoundCompaniesProgress = ({
       
       console.log("Round data fetched:", roundData);
       console.log("Template checkpoints fetched:", templateCheckpoints);
+      
+      // Log detalhado de cada checkpoint
+      templateCheckpoints.forEach((checkpoint: any, index: number) => {
+        console.log(`Checkpoint ${index + 1}:`, {
+          id: checkpoint.id,
+          client_id: checkpoint.client_id,
+          client_name: checkpoint.clients?.name,
+          order_index: checkpoint.order_index
+        });
+      });
+      
       setRoundInfo(roundData);
       
       // Check if any checkpoint requires signature
