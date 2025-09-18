@@ -35,7 +35,37 @@ export const useRoundCheckpoints = () => {
       const templateIds = activeRounds.filter(r => r.template_id).map(r => r.template_id);
       
       if (templateIds.length === 0) {
-        setCheckpoints([]);
+        // Try to get direct client checkpoints if no template
+        const { data: roundsData, error: roundsError } = await supabase
+          .from("rounds")
+          .select(`
+            id,
+            client_id,
+            template_id,
+            clients (id, name, address, lat, lng)
+          `)
+          .in("id", roundIds);
+
+        if (roundsError) throw roundsError;
+
+        const formattedCheckpoints: RoundCheckpoint[] = [];
+        
+        for (const round of roundsData || []) {
+          if (round.clients?.lat && round.clients?.lng) {
+            formattedCheckpoints.push({
+              id: `client_${round.client_id}`,
+              name: round.clients.name,
+              lat: round.clients.lat,
+              lng: round.clients.lng,
+              visited: false,
+              round_id: round.id,
+              client_id: round.client_id,
+              order_index: 1
+            });
+          }
+        }
+
+        setCheckpoints(formattedCheckpoints);
         return;
       }
 

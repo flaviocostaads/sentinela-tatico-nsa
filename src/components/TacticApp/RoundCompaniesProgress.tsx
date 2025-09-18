@@ -78,6 +78,7 @@ const RoundCompaniesProgress = ({
           start_time,
           vehicle,
           template_id,
+          client_id,
           round_templates (
             name,
             description,
@@ -90,15 +91,38 @@ const RoundCompaniesProgress = ({
               clients (
                 id,
                 name,
-                address
+                address,
+                lat,
+                lng
               )
             )
+          ),
+          clients (
+            id,
+            name,
+            address,
+            lat,
+            lng
           )
         `)
         .eq("id", roundId)
-        .single();
+        .maybeSingle();
 
-      if (roundError) throw roundError;
+      if (roundError) {
+        console.error("Error fetching round data:", roundError);
+        throw roundError;
+      }
+      
+      if (!roundData) {
+        toast({
+          title: "Erro",
+          description: "Ronda não encontrada",
+          variant: "destructive",
+        });
+        setClients([]);
+        return;
+      }
+      
       setRoundInfo(roundData);
       
       // Check if any checkpoint requires signature
@@ -109,11 +133,12 @@ const RoundCompaniesProgress = ({
       
       setRequiresSignature(templateRequiresSignature || anyCheckpointRequiresSignature);
 
-      // Processar clientes únicos do template
+      // Processar clientes únicos do template ou da ronda direta
       const clientsSet = new Set<string>();
       const clientsList: Client[] = [];
       
       if (roundData?.round_templates?.round_template_checkpoints) {
+        // Ronda baseada em template
         roundData.round_templates.round_template_checkpoints.forEach((checkpoint: any) => {
           const client = checkpoint.clients;
           
@@ -125,6 +150,13 @@ const RoundCompaniesProgress = ({
               address: client.address
             });
           }
+        });
+      } else if (roundData?.clients) {
+        // Ronda direta com cliente único
+        clientsList.push({
+          id: roundData.clients.id,
+          name: roundData.clients.name,
+          address: roundData.clients.address
         });
       }
 

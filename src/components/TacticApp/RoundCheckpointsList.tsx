@@ -52,7 +52,9 @@ const RoundCheckpointsList = ({
         .eq("active", true)
         .order("order_index");
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching checkpoints:", error);
+      }
 
       if (checkpointsData && checkpointsData.length > 0) {
         const formattedCheckpoints = checkpointsData.map(cp => ({
@@ -80,15 +82,20 @@ const RoundCheckpointsList = ({
                 clients (
                   id,
                   name,
-                  address
+                  address,
+                  lat,
+                  lng
                 )
               )
             )
           `)
           .eq("id", roundId)
-          .single();
+          .maybeSingle();
 
-        if (roundError) throw roundError;
+        if (roundError) {
+          console.error("Error fetching round data:", roundError);
+          throw roundError;
+        }
 
         if (roundData?.round_templates?.round_template_checkpoints) {
           const templateCheckpoints = roundData.round_templates.round_template_checkpoints
@@ -104,6 +111,9 @@ const RoundCheckpointsList = ({
             }));
           
           setCheckpoints(templateCheckpoints);
+        } else {
+          console.log("No checkpoints found for client:", clientId);
+          setCheckpoints([]);
         }
       }
     } catch (error) {
@@ -113,6 +123,7 @@ const RoundCheckpointsList = ({
         description: "Erro ao carregar pontos de ronda",
         variant: "destructive",
       });
+      setCheckpoints([]);
     } finally {
       setLoading(false);
     }
