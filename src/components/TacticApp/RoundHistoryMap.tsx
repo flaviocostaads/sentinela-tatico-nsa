@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useSecureMapbox } from "@/hooks/useSecureMapbox";
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -41,20 +42,21 @@ const RoundHistoryMap = ({ onBack }: RoundHistoryMapProps) => {
   const [selectedRound, setSelectedRound] = useState<string>("");
   const [roundData, setRoundData] = useState<RoundData | null>(null);
   const [loading, setLoading] = useState(true);
+  const { token: mapboxToken, loading: tokenLoading, error: tokenError } = useSecureMapbox();
   const { toast } = useToast();
 
-  const mapboxToken = 'pk.eyJ1IjoiZmxhdmlvY29zdGFhZHMiLCJhIjoiY21laHB4MzVnMGE3ZjJycHVjZnN0N3d4cCJ9.slf_UnkEO8ekt3OU1HttLA';
-
   useEffect(() => {
-    initializeMap();
-    fetchRounds();
+    if (mapboxToken && !tokenLoading) {
+      initializeMap();
+      fetchRounds();
+    }
 
     return () => {
       if (map.current) {
         map.current.remove();
       }
     };
-  }, []);
+  }, [mapboxToken, tokenLoading]);
 
   useEffect(() => {
     if (selectedRound) {
@@ -69,7 +71,7 @@ const RoundHistoryMap = ({ onBack }: RoundHistoryMapProps) => {
   }, [roundData]);
 
   const initializeMap = () => {
-    if (!mapContainer.current || map.current) return;
+    if (!mapContainer.current || map.current || !mapboxToken) return;
 
     mapboxgl.accessToken = mapboxToken;
 
@@ -338,12 +340,25 @@ const RoundHistoryMap = ({ onBack }: RoundHistoryMapProps) => {
     return `${diffHours}h ${diffMinutes}m`;
   };
 
-  if (loading) {
+  if (loading || tokenLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
-          <p className="mt-4 text-muted-foreground">Carregando histórico...</p>
+          <p className="mt-4 text-muted-foreground">
+            {tokenLoading ? "Carregando configuração do mapa..." : "Carregando histórico..."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (tokenError) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-destructive mb-4">Erro ao carregar configuração do mapa</p>
+          <Button onClick={onBack}>Voltar</Button>
         </div>
       </div>
     );

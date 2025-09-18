@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useGpsTracking } from "@/hooks/useGpsTracking";
+import { useSecureMapbox } from "@/hooks/useSecureMapbox";
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -40,24 +41,25 @@ const RealTimeRoundMap = ({ roundId, onBack }: RealTimeRoundMapProps) => {
   const [userLocations, setUserLocations] = useState<UserLocation[]>([]);
   const [roundData, setRoundData] = useState<any>(null);
   const { currentLocation, isTracking } = useGpsTracking();
+  const { token: mapboxToken, loading: tokenLoading, error: tokenError } = useSecureMapbox();
   const { toast } = useToast();
 
-  const mapboxToken = 'pk.eyJ1IjoiZmxhdmlvY29zdGFhZHMiLCJhIjoiY21laHB4MzVnMGE3ZjJycHVjZnN0N3d4cCJ9.slf_UnkEO8ekt3OU1HttLA';
-
   useEffect(() => {
-    initializeMap();
-    fetchRoundData();
-    const unsubscribe = subscribeToUserLocations();
-    const unsubscribeCheckpoints = subscribeToCheckpointVisits();
+    if (mapboxToken && !tokenLoading) {
+      initializeMap();
+      fetchRoundData();
+      const unsubscribe = subscribeToUserLocations();
+      const unsubscribeCheckpoints = subscribeToCheckpointVisits();
 
-    return () => {
-      if (unsubscribe) unsubscribe();
-      if (unsubscribeCheckpoints) unsubscribeCheckpoints();
-      if (map.current) {
-        map.current.remove();
-      }
-    };
-  }, [roundId]);
+      return () => {
+        if (unsubscribe) unsubscribe();
+        if (unsubscribeCheckpoints) unsubscribeCheckpoints();
+        if (map.current) {
+          map.current.remove();
+        }
+      };
+    }
+  }, [roundId, mapboxToken, tokenLoading]);
 
   useEffect(() => {
     if (map.current && checkpoints.length > 0) {
@@ -72,7 +74,7 @@ const RealTimeRoundMap = ({ roundId, onBack }: RealTimeRoundMapProps) => {
   }, [userLocations]);
 
   const initializeMap = () => {
-    if (!mapContainer.current || map.current) return;
+    if (!mapContainer.current || map.current || !mapboxToken) return;
 
     mapboxgl.accessToken = mapboxToken;
 
@@ -352,6 +354,28 @@ const RealTimeRoundMap = ({ roundId, onBack }: RealTimeRoundMapProps) => {
 
   const visitedCount = checkpoints.filter(cp => cp.visited).length;
   const progress = checkpoints.length > 0 ? (visitedCount / checkpoints.length) * 100 : 0;
+
+  if (tokenLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary"></div>
+          <p className="mt-4 text-muted-foreground">Carregando mapa...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (tokenError) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-destructive mb-4">Erro ao carregar configuração do mapa</p>
+          <Button onClick={onBack}>Voltar</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
