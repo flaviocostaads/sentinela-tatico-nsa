@@ -119,25 +119,35 @@ export const useClientCheckpointStats = (roundId: string) => {
         console.log('Total checkpoints per client (from actual checkpoints):', clientStats);
 
         // Now count completed checkpoints based on actual visits
-        // For template-based rounds, visits have checkpoint_id format: "template_{template_checkpoint_id}"
-        visits?.forEach(visit => {
-          const checkpointId = visit.checkpoint_id;
-          console.log('Processing visit with checkpoint_id:', checkpointId);
+        // For template-based rounds, visits have checkpoint_id as real checkpoint UUIDs
+        
+        // Get all checkpoint visits with their checkpoint info in one query
+        const { data: visitCheckpoints, error: visitError } = await supabase
+          .from("checkpoint_visits")
+          .select(`
+            checkpoint_id,
+            checkpoints!inner(
+              id,
+              client_id,
+              name
+            )
+          `)
+          .eq("round_id", roundId);
+
+        if (visitError) {
+          console.error("Error fetching visit checkpoints:", visitError);
+        } else if (visitCheckpoints) {
+          console.log('Visit checkpoints data:', visitCheckpoints);
           
-          // Find which template checkpoint this visit corresponds to
-          templateCheckpoints.forEach((tc: any) => {
-            const templateCheckpointId = `template_${tc.id}`;
-            
-            if (checkpointId === templateCheckpointId) {
-              const clientId = tc.client_id;
-              console.log(`Visit matched template checkpoint ${tc.id} for client ${clientId}`);
-              
-              if (clientStats[clientId]) {
-                clientStats[clientId].completedCheckpoints += 1;
-              }
+          // Count completed checkpoints per client
+          visitCheckpoints.forEach((vc: any) => {
+            const clientId = vc.checkpoints.client_id;
+            if (clientStats[clientId]) {
+              clientStats[clientId].completedCheckpoints += 1;
+              console.log(`Added completed checkpoint for client ${clientId}: ${vc.checkpoints.name}`);
             }
           });
-        });
+        }
 
         // Ensure completed doesn't exceed total
         Object.keys(clientStats).forEach(clientId => {
