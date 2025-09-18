@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { X, Camera, Flashlight, Type, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import jsQR from "jsqr";
 
 interface SimpleCameraScannerProps {
   open: boolean;
@@ -16,13 +17,16 @@ interface SimpleCameraScannerProps {
 
 const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente" }: SimpleCameraScannerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [error, setError] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [manualCode, setManualCode] = useState("");
   const [showManualInput, setShowManualInput] = useState(false);
   const [validatingCode, setValidatingCode] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -30,10 +34,14 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
       startCamera();
     } else {
       stopCamera();
+      stopScanning();
       resetState();
     }
 
-    return () => stopCamera();
+    return () => {
+      stopCamera();
+      stopScanning();
+    };
   }, [open]);
 
   const resetState = () => {
@@ -43,6 +51,61 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
     setShowManualInput(false);
     setManualCode("");
     setValidatingCode(false);
+    setIsScanning(false);
+  };
+
+  const stopScanning = () => {
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    setIsScanning(false);
+  };
+
+  const scanQRCode = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current || !isScanning) {
+      return;
+    }
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx || video.readyState !== video.HAVE_ENOUGH_DATA) {
+      return;
+    }
+
+    // Set canvas dimensions to match video
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    // Draw video frame to canvas
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Get image data for QR scanning
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    try {
+      // Scan for QR code
+      const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
+      
+      if (qrCode && qrCode.data) {
+        console.log("QR Code detected:", qrCode.data);
+        stopScanning();
+        onScan(qrCode.data);
+        onClose();
+      }
+    } catch (error) {
+      console.error("Error scanning QR code:", error);
+    }
+  }, [isScanning, onScan, onClose]);
+
+  const startScanning = () => {
+    console.log("Starting QR code scanning...");
+    setIsScanning(true);
+    
+    // Scan every 100ms for responsive detection
+    scanIntervalRef.current = setInterval(scanQRCode, 100);
   };
 
   const startCamera = async () => {
@@ -79,6 +142,10 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
               .then(() => {
                 console.log("Camera started successfully");
                 setIsLoading(false);
+                // Start QR code scanning after video is playing
+                setTimeout(() => {
+                  startScanning();
+                }, 1000);
               })
               .catch((playError) => {
                 console.error("Video play error:", playError);
@@ -118,6 +185,8 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
   };
 
   const stopCamera = () => {
+    stopScanning();
+    
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => {
         track.stop();
@@ -357,11 +426,23 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
                 </div>
               </div>
 
-              {/* Camera active indicator */}
+              {/* Hidden canvas for QR code scanning */}
+              <canvas 
+                ref={canvasRef} 
+                style={{ display: 'none' }}
+              />
+
+              {/* Camera and scanning indicators */}
               <div className="absolute top-4 left-4 bg-red-500 w-3 h-3 rounded-full animate-pulse"></div>
               <div className="absolute top-4 left-8 text-white text-xs bg-black/50 px-2 py-1 rounded">
-                Câmera ativa
+                {isScanning ? 'Escaneando...' : 'Câmera ativa'}
               </div>
+              
+              {isScanning && (
+                <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white text-sm bg-black/70 px-3 py-1 rounded">
+                  Procurando QR Code...
+                </div>
+              )}
             </>
           )}
         </div>
