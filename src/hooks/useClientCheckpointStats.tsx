@@ -90,71 +90,51 @@ export const useClientCheckpointStats = (roundId: string) => {
         
         // Get unique client IDs from template
         const clientIds = [...new Set(templateCheckpoints.map((tc: any) => tc.client_id))];
+        console.log('Client IDs from template:', clientIds);
         
-        // For each client, count their actual checkpoints from the checkpoints table
+        // Get all checkpoints and visits in one efficient query per client
         for (const clientId of clientIds) {
+          // Get client's checkpoints
           const { data: clientCheckpoints, error: checkpointsError } = await supabase
             .from("checkpoints")
             .select("id, name, active")
             .eq("client_id", clientId)
             .eq("active", true);
 
-          if (!checkpointsError && clientCheckpoints) {
-            clientStats[clientId] = {
-              totalCheckpoints: clientCheckpoints.length,
-              completedCheckpoints: 0
-            };
-            console.log(`Client ${clientId} has ${clientCheckpoints.length} checkpoints:`, clientCheckpoints.map(c => c.name));
-          } else {
+          if (checkpointsError) {
             console.error(`Error fetching checkpoints for client ${clientId}:`, checkpointsError);
-            // Fallback to template count
-            const templateCount = templateCheckpoints.filter((tc: any) => tc.client_id === clientId).length;
-            clientStats[clientId] = {
-              totalCheckpoints: templateCount,
-              completedCheckpoints: 0
-            };
+            continue;
           }
-        }
 
-        console.log('Total checkpoints per client (from actual checkpoints):', clientStats);
+          const totalCheckpoints = clientCheckpoints?.length || 0;
+          console.log(`Client ${clientId} has ${totalCheckpoints} total checkpoints:`, clientCheckpoints?.map(c => c.name));
 
-        // Now count completed checkpoints based on actual visits
-        // For template-based rounds, visits have checkpoint_id as real checkpoint UUIDs
-        
-        // Get all checkpoint visits with their checkpoint info in one query
-        const { data: visitCheckpoints, error: visitError } = await supabase
-          .from("checkpoint_visits")
-          .select(`
-            checkpoint_id,
-            checkpoints!inner(
-              id,
-              client_id,
-              name
-            )
-          `)
-          .eq("round_id", roundId);
+          // Count completed visits for this client's checkpoints
+          let completedCheckpoints = 0;
+          if (clientCheckpoints && clientCheckpoints.length > 0) {
+            const checkpointIds = clientCheckpoints.map(c => c.id);
+            
+            const { data: visitCount, error: visitError } = await supabase
+              .from("checkpoint_visits")
+              .select("id", { count: 'exact' })
+              .eq("round_id", roundId)
+              .in("checkpoint_id", checkpointIds);
 
-        if (visitError) {
-          console.error("Error fetching visit checkpoints:", visitError);
-        } else if (visitCheckpoints) {
-          console.log('Visit checkpoints data:', visitCheckpoints);
-          
-          // Count completed checkpoints per client
-          visitCheckpoints.forEach((vc: any) => {
-            const clientId = vc.checkpoints.client_id;
-            if (clientStats[clientId]) {
-              clientStats[clientId].completedCheckpoints += 1;
-              console.log(`Added completed checkpoint for client ${clientId}: ${vc.checkpoints.name}`);
+            if (visitError) {
+              console.error(`Error counting visits for client ${clientId}:`, visitError);
+            } else {
+              completedCheckpoints = visitCount?.length || 0;
+              console.log(`Client ${clientId} has ${completedCheckpoints} completed checkpoints`);
             }
-          });
+          }
+
+          clientStats[clientId] = {
+            totalCheckpoints,
+            completedCheckpoints: Math.min(completedCheckpoints, totalCheckpoints)
+          };
         }
 
-        // Ensure completed doesn't exceed total
-        Object.keys(clientStats).forEach(clientId => {
-          if (clientStats[clientId].completedCheckpoints > clientStats[clientId].totalCheckpoints) {
-            clientStats[clientId].completedCheckpoints = clientStats[clientId].totalCheckpoints;
-          }
-        });
+        console.log('Final client stats calculated:', clientStats);
       } else {
         console.log('No template checkpoints found, checking for direct client round');
         
