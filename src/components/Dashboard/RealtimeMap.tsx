@@ -175,7 +175,7 @@ const RealtimeMap = () => {
     }
   };
 
-  const updateClientMarkers = () => {
+  const updateClientMarkers = async () => {
     if (!map.current || !map.current.getContainer()) return;
 
     // Clear existing client markers
@@ -192,21 +192,47 @@ const RealtimeMap = () => {
 
     // Get active rounds to determine which clients are in templates
     const activeRounds = userLocations.map(loc => loc.rounds).filter(Boolean);
-    const clientsInActiveRounds = new Set<string>();
+    const activeTemplateIds = activeRounds.map(round => round?.template_id).filter(Boolean);
     
-    // Collect client IDs that are part of active round templates
+    console.log('Active rounds:', activeRounds);
+    console.log('Active template IDs:', activeTemplateIds);
+    
+    let clientsInActiveRounds = new Set<string>();
+    
+    // If we have active templates, get the clients from them
+    if (activeTemplateIds.length > 0) {
+      try {
+        const { data: templateCheckpoints, error } = await supabase
+          .from("round_template_checkpoints")
+          .select("client_id, template_id")
+          .in("template_id", activeTemplateIds);
+
+        if (error) {
+          console.error('Error fetching template checkpoints for markers:', error);
+        } else {
+          clientsInActiveRounds = new Set(templateCheckpoints?.map(cp => cp.client_id) || []);
+          console.log('Clients from template checkpoints:', Array.from(clientsInActiveRounds));
+        }
+      } catch (error) {
+        console.error('Error in updateClientMarkers template fetch:', error);
+      }
+    }
+    
+    // Also check roundCheckpoints if available (fallback)
     roundCheckpoints.forEach(checkpoint => {
       if (checkpoint.client_id) {
         clientsInActiveRounds.add(checkpoint.client_id);
       }
     });
 
-    console.log('Clients in active rounds:', Array.from(clientsInActiveRounds));
+    console.log('Final clients in active rounds:', Array.from(clientsInActiveRounds));
     console.log('All clients to display:', clients);
 
     clients.forEach(client => {
       if (client.lat && client.lng) {
         const isInActiveRound = clientsInActiveRounds.has(client.id);
+        
+        console.log(`Client ${client.name} (${client.id}): isInActiveRound = ${isInActiveRound}`);
         
         // Create client marker with different colors based on whether it's in an active round
         const el = document.createElement('div');

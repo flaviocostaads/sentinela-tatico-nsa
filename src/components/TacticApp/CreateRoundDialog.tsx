@@ -127,21 +127,25 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
 
   const fetchTactics = async () => {
     try {
-      // For tactical users, we don't need to show a selection - they create rounds for themselves
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Get current user's profile to check role
       const { data: profile, error } = await supabase
         .from("profiles")
         .select("id, name, role, user_id")
         .eq("user_id", user.id)
-        .eq("role", "tatico")
-        .maybeSingle();
+        .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching user profile:", error);
+        throw error;
+      }
       
-      if (profile) {
-        // Set the current user as the default and only tactic
+      console.log("Current user profile:", profile);
+      
+      if (profile?.role === "tatico") {
+        // For tactical users, auto-select themselves
         setTactics([{
           id: profile.user_id,
           name: profile.name,
@@ -150,9 +154,43 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
         
         // Auto-select the current user
         setFormData(prev => ({ ...prev, tactic_id: profile.user_id }));
+        console.log("Auto-selected tactical user:", profile.name);
+      } else if (profile?.role === "admin" || profile?.role === "operador") {
+        // For admin/operator users, fetch all tactical users
+        const { data: tacticalUsers, error: tacticalError } = await supabase
+          .from("profiles")
+          .select("id, name, role, user_id")
+          .eq("role", "tatico")
+          .order("name");
+
+        if (tacticalError) {
+          console.error("Error fetching tactical users:", tacticalError);
+          throw tacticalError;
+        }
+
+        console.log("Available tactical users:", tacticalUsers);
+        
+        if (tacticalUsers && tacticalUsers.length > 0) {
+          setTactics(tacticalUsers.map(user => ({
+            id: user.user_id,
+            name: user.name,
+            role: user.role
+          })));
+        } else {
+          toast({
+            title: "Aviso",
+            description: "Nenhum usuário tático encontrado no sistema",
+            variant: "destructive",
+          });
+        }
       }
     } catch (error) {
       console.error("Error fetching tactics:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar usuários táticos",
+        variant: "destructive",
+      });
     }
   };
 
@@ -172,23 +210,32 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
       if (!selectedVehicle) throw new Error("Veículo não encontrado");
 
-      // Get template checkpoints to create rounds for each client
-      const { data: templateCheckpoints, error: checkpointsError } = await supabase
-        .from("round_template_checkpoints")
-        .select("client_id")
-        .eq("template_id", formData.template_id);
+      // Get template info to validate it has checkpoints
+      const { data: templateData, error: templateError } = await supabase
+        .from("round_templates")
+        .select(`
+          id,
+          name,
+          round_template_checkpoints (
+            id,
+            client_id
+          )
+        `)
+        .eq("id", formData.template_id)
+        .single();
 
-      if (checkpointsError) throw checkpointsError;
+      if (templateError) throw templateError;
 
-      if (!templateCheckpoints || templateCheckpoints.length === 0) {
-        throw new Error("Template sem clientes configurados");
+      if (!templateData?.round_template_checkpoints || templateData.round_template_checkpoints.length === 0) {
+        throw new Error("Template sem checkpoints configurados");
       }
 
-      // Create only ONE round with the first client in the template
-      const firstClientId = templateCheckpoints[0].client_id;
+      console.log("Template data for round creation:", templateData);
+
+      // Create ONE round using the template (not tied to a specific client)
       const roundData = {
         user_id: selectedTacticUserId,
-        client_id: firstClientId,
+        client_id: templateData.round_template_checkpoints[0].client_id, // Use first client as reference
         template_id: formData.template_id,
         vehicle_id: formData.vehicle_id,
         vehicle: selectedVehicle.type,
@@ -198,6 +245,8 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
         requires_signature: false,
         created_by: user.id
       };
+
+      console.log("Creating round with data:", roundData);
 
       const { error } = await supabase
         .from("rounds")

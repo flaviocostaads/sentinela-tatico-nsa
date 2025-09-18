@@ -26,10 +26,15 @@ export const useClientCheckpointStats = (roundId: string) => {
         .select(`
           id,
           template_id,
+          user_id,
+          client_id,
           round_templates (
+            id,
+            name,
             round_template_checkpoints (
               id,
               client_id,
+              order_index,
               clients (id, name)
             )
           )
@@ -37,9 +42,12 @@ export const useClientCheckpointStats = (roundId: string) => {
         .eq("id", roundId)
         .single();
 
-      if (roundError) throw roundError;
+      if (roundError) {
+        console.error("Error fetching round data:", roundError);
+        throw roundError;
+      }
 
-      console.log("Fetching stats for round:", roundId, "Template data:", roundData);
+      console.log("Fetching stats for round:", roundId, "Round data:", roundData);
 
       // Get completed visits for this round
       const { data: visits, error: visitsError } = await supabase
@@ -50,7 +58,10 @@ export const useClientCheckpointStats = (roundId: string) => {
         `)
         .eq("round_id", roundId);
 
-      if (visitsError) throw visitsError;
+      if (visitsError) {
+        console.error("Error fetching visits:", visitsError);
+        throw visitsError;
+      }
       
       console.log("Checkpoint visits for stats:", visits);
 
@@ -80,6 +91,7 @@ export const useClientCheckpointStats = (roundId: string) => {
         // For template-based rounds, visits have checkpoint_id format: "template_{template_checkpoint_id}"
         visits?.forEach(visit => {
           const checkpointId = visit.checkpoint_id;
+          console.log('Processing visit with checkpoint_id:', checkpointId);
           
           // Find which template checkpoint this visit corresponds to
           roundData.round_templates.round_template_checkpoints.forEach((tc: any) => {
@@ -87,6 +99,7 @@ export const useClientCheckpointStats = (roundId: string) => {
             
             if (checkpointId === templateCheckpointId) {
               const clientId = tc.client_id;
+              console.log(`Visit matched template checkpoint ${tc.id} for client ${clientId}`);
               
               if (clientStats[clientId]) {
                 clientStats[clientId].completedCheckpoints += 1;
@@ -101,6 +114,18 @@ export const useClientCheckpointStats = (roundId: string) => {
             clientStats[clientId].completedCheckpoints = clientStats[clientId].totalCheckpoints;
           }
         });
+      } else {
+        console.log('No template checkpoints found, checking for direct client round');
+        
+        // For direct client rounds (fallback)
+        if (roundData?.client_id) {
+          const clientId = roundData.client_id;
+          clientStats[clientId] = {
+            totalCheckpoints: 1,
+            completedCheckpoints: visits?.length || 0
+          };
+          console.log('Direct client round stats:', clientStats);
+        }
       }
 
       console.log('Final checkpoint stats calculated:', clientStats);

@@ -73,7 +73,11 @@ export const useRoundCheckpoints = () => {
       const { data: templateCheckpoints, error: templateError } = await supabase
         .from("round_template_checkpoints")
         .select(`
-          *,
+          id,
+          template_id,
+          client_id,
+          order_index,
+          required_signature,
           clients (id, name, address, lat, lng)
         `)
         .in("template_id", templateIds)
