@@ -175,22 +175,45 @@ const RealtimeMap = () => {
     });
     clientMarkers.current = [];
 
+    // Get active rounds to determine which clients are in templates
+    const activeRounds = userLocations.map(loc => loc.rounds).filter(Boolean);
+    const clientsInActiveRounds = new Set<string>();
+    
+    // Collect client IDs that are part of active round templates
+    roundCheckpoints.forEach(checkpoint => {
+      if (checkpoint.client_id) {
+        clientsInActiveRounds.add(checkpoint.client_id);
+      }
+    });
+
+    console.log('Clients in active rounds:', Array.from(clientsInActiveRounds));
+    console.log('All clients to display:', clients);
+
     clients.forEach(client => {
       if (client.lat && client.lng) {
-        // Create client marker
+        const isInActiveRound = clientsInActiveRounds.has(client.id);
+        
+        // Create client marker with different colors based on whether it's in an active round
         const el = document.createElement('div');
         el.style.width = '20px';
         el.style.height = '20px';
         el.style.borderRadius = '50%';
-        el.style.backgroundColor = 'hsl(var(--tactical-blue))';
+        el.style.backgroundColor = isInActiveRound ? 'hsl(var(--tactical-red))' : 'hsl(var(--tactical-blue))';
         el.style.border = '3px solid white';
-        el.style.boxShadow = '0 2px 10px rgba(0,0,0,0.3)';
+        el.style.boxShadow = isInActiveRound ? 
+          '0 0 15px hsl(var(--tactical-red) / 0.5), 0 2px 10px rgba(0,0,0,0.3)' : 
+          '0 2px 10px rgba(0,0,0,0.3)';
         el.style.cursor = 'pointer';
+
+        // Add pulsing effect for clients in active rounds
+        if (isInActiveRound) {
+          el.style.animation = 'pulse 2s infinite';
+        }
 
         // Create label for client
         const labelEl = document.createElement('div');
         labelEl.style.cssText = `
-          background: hsl(var(--primary));
+          background: ${isInActiveRound ? 'hsl(var(--tactical-red))' : 'hsl(var(--primary))'};
           color: hsl(var(--primary-foreground));
           padding: 2px 6px;
           border-radius: 4px;
@@ -201,6 +224,7 @@ const RealtimeMap = () => {
           pointer-events: none;
           transform: translate(-50%, -100%);
           margin-bottom: 5px;
+          ${isInActiveRound ? 'animation: pulse 2s infinite;' : ''}
         `;
         labelEl.textContent = client.name;
 
@@ -212,11 +236,12 @@ const RealtimeMap = () => {
           .setLngLat([client.lng, client.lat])
           .setPopup(
             new mapboxgl.Popup({ offset: 25 }).setHTML(`
-              <div style="padding: 10px;">
-                <h3 style="margin: 0 0 5px 0; font-weight: 600;">${client.name}</h3>
+              <div style="padding: 10px; ${isInActiveRound ? 'border: 3px solid hsl(var(--tactical-red)); background: linear-gradient(135deg, #fef2f2, #ffffff);' : ''}">
+                <h3 style="margin: 0 0 5px 0; font-weight: 600; ${isInActiveRound ? 'color: hsl(var(--tactical-red));' : ''}">${isInActiveRound ? '🎯 ' : ''}${client.name}</h3>
+                ${isInActiveRound ? '<div style="background: hsl(var(--tactical-red)); color: white; padding: 4px 8px; border-radius: 4px; margin: 0 0 5px 0; font-weight: bold; font-size: 11px; text-align: center;">🎯 INCLUÍDO NA RONDA ATIVA</div>' : ''}
                 <p style="margin: 0; font-size: 12px;">${client.address}</p>
                 <p style="margin: 5px 0 0 0; font-size: 11px; opacity: 0.8;">
-                  ${client.lat.toFixed(4)}, ${client.lng.toFixed(4)}
+                  📍 ${client.lat.toFixed(4)}, ${client.lng.toFixed(4)}
                 </p>
               </div>
             `)
@@ -433,13 +458,18 @@ const RealtimeMap = () => {
 
   const fetchRoundCheckpoints = async (activeRounds: any[]) => {
     try {
+      console.log('Fetching round checkpoints for active rounds:', activeRounds);
+      
       const roundIds = activeRounds.map(r => r.id);
       const templateIds = activeRounds.filter(r => r.template_id).map(r => r.template_id);
       
       if (templateIds.length === 0) {
+        console.log('No template IDs found, clearing checkpoints');
         setRoundCheckpoints([]);
         return;
       }
+
+      console.log('Template IDs:', templateIds);
 
       // Get checkpoints from templates
       const { data: templateCheckpoints, error: templateError } = await supabase
@@ -451,7 +481,12 @@ const RealtimeMap = () => {
         .in("template_id", templateIds)
         .order("order_index");
 
-      if (templateError) throw templateError;
+      if (templateError) {
+        console.error('Error fetching template checkpoints:', templateError);
+        throw templateError;
+      }
+
+      console.log('Template checkpoints fetched:', templateCheckpoints);
 
       // Get checkpoint visits for these rounds
       const { data: visits, error: visitsError } = await supabase
@@ -459,16 +494,29 @@ const RealtimeMap = () => {
         .select("checkpoint_id, round_id")
         .in("round_id", roundIds);
 
-      if (visitsError) throw visitsError;
+      if (visitsError) {
+        console.error('Error fetching checkpoint visits:', visitsError);
+        throw visitsError;
+      }
+
+      console.log('Checkpoint visits:', visits);
 
       // Get checkpoints data to map client_ids from checkpoint visits  
       const visitedCheckpointIds = visits?.map(v => v.checkpoint_id) || [];
-      const { data: checkpoints, error: checkpointsError } = await supabase
-        .from("checkpoints")
-        .select("id, client_id, name")
-        .in("id", visitedCheckpointIds);
+      let checkpoints: any[] = [];
+      
+      if (visitedCheckpointIds.length > 0) {
+        const { data: checkpointsData, error: checkpointsError } = await supabase
+          .from("checkpoints")
+          .select("id, client_id, name")
+          .in("id", visitedCheckpointIds);
 
-      if (checkpointsError) throw checkpointsError;
+        if (checkpointsError) {
+          console.error('Error fetching checkpoints:', checkpointsError);
+        } else {
+          checkpoints = checkpointsData || [];
+        }
+      }
 
       // Create a map of client_id -> visited status from completed visits
       const visitedByClient = new Set<string>();
@@ -502,6 +550,7 @@ const RealtimeMap = () => {
         }
       });
 
+      console.log('Processed round checkpoints:', formattedCheckpoints);
       setRoundCheckpoints(formattedCheckpoints);
     } catch (error) {
       console.error("Error fetching round checkpoints:", error);

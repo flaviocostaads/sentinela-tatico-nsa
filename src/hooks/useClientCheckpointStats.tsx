@@ -78,7 +78,9 @@ export const useClientCheckpointStats = (roundId: string) => {
       const clientStats: ClientStats = {};
 
       if (roundData?.round_templates?.round_template_checkpoints) {
-        // First, count total checkpoints per client
+        console.log('Processing template checkpoints for stats:', roundData.round_templates.round_template_checkpoints);
+        
+        // First, count total checkpoints per client from the template
         roundData.round_templates.round_template_checkpoints.forEach((templateCheckpoint: any) => {
           const clientId = templateCheckpoint.client_id;
           
@@ -92,25 +94,22 @@ export const useClientCheckpointStats = (roundId: string) => {
           clientStats[clientId].totalCheckpoints += 1;
         });
 
-        // Now count completed checkpoints for each client
-        completedCheckpointsByClient.forEach((completedCheckpoints, clientId) => {
-          if (clientStats[clientId]) {
-            // Count how many of the client's checkpoints are completed
-            let completedCount = 0;
-            
-            roundData.round_templates.round_template_checkpoints.forEach((templateCheckpoint: any) => {
-              if (templateCheckpoint.client_id === clientId) {
-                // Find actual checkpoint that matches this template checkpoint
-                visits?.forEach(visit => {
-                  if (visit.checkpoints?.client_id === clientId && 
-                      completedCheckpoints.has(visit.checkpoint_id)) {
-                    completedCount++;
-                  }
-                });
-              }
-            });
-            
-            clientStats[clientId].completedCheckpoints = Math.min(completedCount, clientStats[clientId].totalCheckpoints);
+        console.log('Total checkpoints per client (from template):', clientStats);
+
+        // Now count completed checkpoints based on actual visits
+        visits?.forEach(visit => {
+          const clientId = visit.checkpoints?.client_id;
+          
+          if (clientId && clientStats[clientId]) {
+            // Increment completed count for this client
+            clientStats[clientId].completedCheckpoints += 1;
+          }
+        });
+
+        // Ensure completed doesn't exceed total
+        Object.keys(clientStats).forEach(clientId => {
+          if (clientStats[clientId].completedCheckpoints > clientStats[clientId].totalCheckpoints) {
+            clientStats[clientId].completedCheckpoints = clientStats[clientId].totalCheckpoints;
           }
         });
       }

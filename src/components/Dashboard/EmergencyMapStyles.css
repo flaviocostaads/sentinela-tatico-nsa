@@ -57,6 +57,19 @@
   }
 }
 
+/* Pulse animation for active round clients */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
 /* Ensure emergency popups are visible above everything */
 .emergency-alert-popup {
   pointer-events: none;

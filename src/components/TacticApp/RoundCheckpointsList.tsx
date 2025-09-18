@@ -44,7 +44,9 @@ const RoundCheckpointsList = ({
 
   const fetchCheckpoints = async () => {
     try {
-      // Buscar checkpoints do cliente
+      console.log("Fetching checkpoints for client:", clientId, "round:", roundId);
+      
+      // Primeiro buscar checkpoints físicos do cliente
       const { data: checkpointsData, error } = await supabase
         .from("checkpoints")
         .select("*")
@@ -56,6 +58,8 @@ const RoundCheckpointsList = ({
         console.error("Error fetching checkpoints:", error);
       }
 
+      console.log("Physical checkpoints found:", checkpointsData);
+
       if (checkpointsData && checkpointsData.length > 0) {
         const formattedCheckpoints = checkpointsData.map(cp => ({
           id: cp.id,
@@ -66,9 +70,10 @@ const RoundCheckpointsList = ({
           order_index: cp.order_index,
           checklist_items: cp.checklist_items
         }));
+        console.log("Using physical checkpoints:", formattedCheckpoints);
         setCheckpoints(formattedCheckpoints);
       } else {
-        // Fallback: buscar checkpoints do template da ronda
+        // Fallback: buscar informações do template da ronda para este cliente
         const { data: roundData, error: roundError } = await supabase
           .from("rounds")
           .select(`
@@ -97,22 +102,31 @@ const RoundCheckpointsList = ({
           throw roundError;
         }
 
+        console.log("Round template data:", roundData);
+
         if (roundData?.round_templates?.round_template_checkpoints) {
-          const templateCheckpoints = roundData.round_templates.round_template_checkpoints
-            .filter((cp: any) => cp.clients.id === clientId)
-            .map((cp: any) => ({
-              id: `template_${cp.id}`,
-              name: cp.clients.name,
-              description: `Checkpoint em ${cp.clients.name}`,
-              order_index: cp.order_index,
-              qr_code: null,
-              manual_code: null,
-              checklist_items: []
-            }));
+          // Buscar todos os checkpoints deste cliente no template
+          const clientTemplateCheckpoints = roundData.round_templates.round_template_checkpoints
+            .filter((cp: any) => cp.client_id === clientId)
+            .sort((a: any, b: any) => a.order_index - b.order_index);
           
+          console.log("Template checkpoints for client:", clientTemplateCheckpoints);
+          
+          // Criar checkpoints virtuais baseados no template
+          const templateCheckpoints = clientTemplateCheckpoints.map((cp: any, index: number) => ({
+            id: `virtual_${cp.id}_${clientId}`,
+            name: `Ponto ${index + 1} - ${cp.clients?.name || 'Cliente'}`,
+            description: `Ronda em ${cp.clients?.name || 'Cliente'} - ${cp.clients?.address || 'Endereço não informado'}`,
+            order_index: cp.order_index,
+            qr_code: null,
+            manual_code: null,
+            checklist_items: []
+          }));
+          
+          console.log("Created virtual checkpoints:", templateCheckpoints);
           setCheckpoints(templateCheckpoints);
         } else {
-          console.log("No checkpoints found for client:", clientId);
+          console.log("No template checkpoints found for client:", clientId);
           setCheckpoints([]);
         }
       }

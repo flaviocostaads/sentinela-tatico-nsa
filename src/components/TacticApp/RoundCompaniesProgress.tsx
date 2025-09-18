@@ -123,6 +123,7 @@ const RoundCompaniesProgress = ({
         return;
       }
       
+      console.log("Round data fetched:", roundData);
       setRoundInfo(roundData);
       
       // Check if any checkpoint requires signature
@@ -138,9 +139,13 @@ const RoundCompaniesProgress = ({
       const clientsList: Client[] = [];
       
       if (roundData?.round_templates?.round_template_checkpoints) {
+        console.log("Processing template checkpoints:", roundData.round_templates.round_template_checkpoints);
+        
         // Ronda baseada em template
         roundData.round_templates.round_template_checkpoints.forEach((checkpoint: any) => {
           const client = checkpoint.clients;
+          
+          console.log("Processing checkpoint:", checkpoint, "Client:", client);
           
           // Verificar se o cliente não é null antes de processar
           if (client && client.id && !clientsSet.has(client.id)) {
@@ -150,6 +155,7 @@ const RoundCompaniesProgress = ({
               name: client.name || 'Cliente sem nome',
               address: client.address || 'Endereço não informado'
             });
+            console.log("Added client to list:", client.name);
           }
         });
       } else if (roundData?.clients) {
@@ -159,8 +165,10 @@ const RoundCompaniesProgress = ({
           name: roundData.clients.name,
           address: roundData.clients.address
         });
+        console.log("Added direct client:", roundData.clients.name);
       }
 
+      console.log("Final clients list:", clientsList);
       setClients(clientsList.sort((a, b) => a.name.localeCompare(b.name)));
 
     } catch (error) {
