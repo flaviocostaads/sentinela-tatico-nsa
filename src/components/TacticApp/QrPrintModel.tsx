@@ -31,32 +31,50 @@ const QrPrintModel: React.FC<QrPrintModelProps> = ({
   // Save manual code to database for validation
   const saveManualCodeToDatabase = async (manualCode: string, qrData: string) => {
     try {
-      // Find checkpoint by name (pointName is the client name) - using secure parameter
-      const { data: checkpoints, error } = await supabase
-        .from("checkpoints")
-        .select("*")
+      console.log("Saving manual code for:", { pointName, manualCode });
+      
+      // First try to find checkpoint by client name since pointName is the client name
+      const { data: client, error: clientError } = await supabase
+        .from("clients")
+        .select("id, name")
         .ilike("name", `%${pointName.replace(/[%_]/g, '\\$&')}%`)
-        .limit(1);
+        .single();
 
-      if (error) {
-        console.error("Error finding checkpoint:", error);
+      if (clientError) {
+        console.error("Error finding client:", clientError);
         return;
       }
 
-      if (checkpoints && checkpoints.length > 0) {
-        // Update the checkpoint with the manual code
-        const { error: updateError } = await supabase
+      if (client) {
+        // Find checkpoints for this client
+        const { data: checkpoints, error } = await supabase
           .from("checkpoints")
-          .update({ 
-            manual_code: manualCode,
-            qr_code: qrData
-          })
-          .eq("id", checkpoints[0].id);
+          .select("*")
+          .eq("client_id", client.id)
+          .limit(1);
 
-        if (updateError) {
-          console.error("Error updating checkpoint:", updateError);
+        if (error) {
+          console.error("Error finding checkpoint:", error);
+          return;
+        }
+
+        if (checkpoints && checkpoints.length > 0) {
+          // Update the checkpoint with the manual code
+          const { error: updateError } = await supabase
+            .from("checkpoints")
+            .update({ 
+              manual_code: manualCode,
+              qr_code: qrData
+            })
+            .eq("id", checkpoints[0].id);
+
+          if (updateError) {
+            console.error("Error updating checkpoint:", updateError);
+          } else {
+            console.log("Manual code saved to checkpoint:", manualCode, "for client:", client.name);
+          }
         } else {
-          console.log("Manual code saved to checkpoint:", manualCode);
+          console.log("No checkpoints found for client:", client.name);
         }
       }
     } catch (error) {
@@ -95,36 +113,57 @@ const QrPrintModel: React.FC<QrPrintModelProps> = ({
 
   const loadExistingOrGenerateQRCode = async () => {
     try {
-      // First try to find existing checkpoint with QR code - using secure parameter
-      const { data: checkpoints } = await supabase
-        .from("checkpoints")
-        .select("*")
+      console.log("Loading QR code for client:", pointName);
+      
+      // First find the client by name
+      const { data: client, error: clientError } = await supabase
+        .from("clients")
+        .select("id, name")
         .ilike("name", `%${pointName.replace(/[%_]/g, '\\$&')}%`)
-        .limit(1);
+        .single();
 
-      if (checkpoints && checkpoints.length > 0 && checkpoints[0].manual_code && checkpoints[0].qr_code) {
-        // Use existing QR code and manual code
-        setManualCode(checkpoints[0].manual_code);
-        const existingQrData = checkpoints[0].qr_code;
-        
-        // Generate QR image from existing data
-        QRCode.toDataURL(existingQrData, {
-          width: 320,
-          margin: 2,
-          color: {
-            dark: '#000000',
-            light: '#FFFFFF'
-          }
-        })
-        .then(url => {
-          setQrCodeDataUrl(url);
-        })
-        .catch(err => {
-          console.error('Error generating QR code from existing data:', err);
+      if (clientError) {
+        console.error("Error finding client:", clientError);
+        generateNewQRCode();
+        return;
+      }
+
+      if (client) {
+        // Find checkpoints for this client
+        const { data: checkpoints } = await supabase
+          .from("checkpoints")
+          .select("*")
+          .eq("client_id", client.id)
+          .limit(1);
+
+        if (checkpoints && checkpoints.length > 0 && checkpoints[0].manual_code && checkpoints[0].qr_code) {
+          // Use existing QR code and manual code
+          console.log("Found existing checkpoint with codes:", checkpoints[0].manual_code);
+          setManualCode(checkpoints[0].manual_code);
+          const existingQrData = checkpoints[0].qr_code;
+          
+          // Generate QR image from existing data
+          QRCode.toDataURL(existingQrData, {
+            width: 320,
+            margin: 2,
+            color: {
+              dark: '#000000',
+              light: '#FFFFFF'
+            }
+          })
+          .then(url => {
+            setQrCodeDataUrl(url);
+          })
+          .catch(err => {
+            console.error('Error generating QR code from existing data:', err);
+            generateNewQRCode();
+          });
+        } else {
+          // Generate new QR code
+          console.log("No existing QR code found, generating new one");
           generateNewQRCode();
-        });
+        }
       } else {
-        // Generate new QR code
         generateNewQRCode();
       }
     } catch (error) {

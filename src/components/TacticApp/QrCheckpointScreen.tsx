@@ -378,19 +378,34 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
 
   const handleQrScan = async (qrCode: string) => {
     console.log("QR Code scanned:", qrCode);
+    console.log("Current checkpoint client:", checkpoint?.clients?.name);
     
     try {
-      // Always set QR as scanned first - we'll validate but be flexible
+      // Always set QR as scanned first for better UX - we'll validate but be flexible
       console.log("Setting QR as scanned and validating...");
       
       // Try to parse as JSON first (structured QR code)
       try {
         const parsed = JSON.parse(qrCode);
         if (parsed.type === 'checkpoint') {
+          // Check if the company name matches (flexible matching)
+          const scannedCompany = parsed.company?.toLowerCase();
+          const currentClient = checkpoint?.clients?.name?.toLowerCase();
+          
+          if (currentClient && scannedCompany && (scannedCompany.includes(currentClient) || currentClient.includes(scannedCompany))) {
+            setQrScanned(true);
+            toast({
+              title: "QR Code válido",
+              description: `Código de ${parsed.company || 'Cliente'} validado`,
+            });
+            return;
+          }
+          
+          // Accept any checkpoint type QR code for now
           setQrScanned(true);
           toast({
             title: "QR Code válido",
-            description: `Código de ${parsed.company || 'Cliente'} validado`,
+            description: `Código de checkpoint validado`,
           });
           return;
         }
@@ -411,7 +426,7 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
       // Get checkpoint data to validate against stored codes
       const { data: checkpointData, error } = await supabase
         .from("checkpoints")
-        .select("qr_code, manual_code, name, id")
+        .select("qr_code, manual_code, name, id, clients(name)")
         .eq("id", checkpointId)
         .single();
 
@@ -442,11 +457,23 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
           checkpointData.manual_code
         ].filter(Boolean);
         
+        // Also extract manual code from JSON QR if it exists
+        if (checkpointData.qr_code) {
+          try {
+            const qrJson = JSON.parse(checkpointData.qr_code);
+            if (qrJson.manualCode) {
+              validCodes.push(qrJson.manualCode);
+            }
+          } catch (e) {
+            // Ignore JSON parse errors
+          }
+        }
+        
         if (validCodes.includes(qrCode)) {
           setQrScanned(true);
           toast({
             title: "QR Code válido",
-            description: `Código validado para ${checkpointData.name}`,
+            description: `Código validado para ${checkpointData.clients?.name || checkpointData.name}`,
           });
           return;
         }
