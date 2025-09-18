@@ -1,20 +1,112 @@
+import { useState, useEffect } from "react";
 import { Clock, MapPin, Camera, AlertTriangle, User, Navigation, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Round, CheckpointVisit } from "@/types";
-import { MockDataStore } from "@/data/mockData";
+import { Round } from "@/types";
+import { supabase } from "@/integrations/supabase/client";
+import { useClientCheckpointStats } from "@/hooks/useClientCheckpointStats";
 
 interface RoundDetailsProps {
   round: Round;
   onClose?: () => void;
 }
 
+interface CheckpointVisit {
+  id: string;
+  checkpoint_id: string;
+  visit_time: string;
+  duration: number;
+  status: string;
+}
+
+interface TemplateCheckpoint {
+  id: string;
+  client_id: string;
+  order_index: number;
+  clients: {
+    name: string;
+    address: string;
+  };
+}
+
+interface Incident {
+  id: string;
+  title: string;
+  description?: string;
+  type: string;
+  priority: string;
+  reported_at: string;
+}
+
 const RoundDetails = ({ round, onClose }: RoundDetailsProps) => {
-  const dataStore = MockDataStore.getInstance();
-  const checkpoints = dataStore.getClientCheckpoints(round.clientId);
-  const visits = dataStore.checkpointVisits.filter(v => v.roundId === round.id);
+  const [checkpointVisits, setCheckpointVisits] = useState<CheckpointVisit[]>([]);
+  const [templateCheckpoints, setTemplateCheckpoints] = useState<TemplateCheckpoint[]>([]);
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { stats, getTotalStats } = useClientCheckpointStats(round.id);
+
+  useEffect(() => {
+    fetchRoundData();
+  }, [round.id]);
+
+  const fetchRoundData = async () => {
+    try {
+      setLoading(true);
+
+      // Fetch round data to get template_id
+      const { data: roundData, error: roundError } = await supabase
+        .from("rounds")
+        .select("id, template_id")
+        .eq("id", round.id)
+        .single();
+
+      if (roundError) throw roundError;
+
+      // Fetch checkpoint visits
+      const { data: visitsData, error: visitsError } = await supabase
+        .from("checkpoint_visits")
+        .select("*")
+        .eq("round_id", round.id)
+        .order("visit_time");
+
+      if (visitsError) throw visitsError;
+      setCheckpointVisits(visitsData || []);
+
+      // Fetch template checkpoints if template exists
+      if (roundData.template_id) {
+        const { data: templateData, error: templateError } = await supabase
+          .from("round_template_checkpoints")
+          .select(`
+            id,
+            client_id,
+            order_index,
+            clients (name, address)
+          `)
+          .eq("template_id", roundData.template_id)
+          .order("order_index");
+
+        if (templateError) throw templateError;
+        setTemplateCheckpoints(templateData || []);
+      }
+
+      // Fetch incidents
+      const { data: incidentsData, error: incidentsError } = await supabase
+        .from("incidents")
+        .select("*")
+        .eq("round_id", round.id)
+        .order("reported_at");
+
+      if (incidentsError) throw incidentsError;
+      setIncidents(incidentsData || []);
+
+    } catch (error) {
+      console.error("Error fetching round data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusColor = (status: Round['status']) => {
     switch (status) {
@@ -128,62 +220,73 @@ const RoundDetails = ({ round, onClose }: RoundDetailsProps) => {
           <div className="space-y-3">
             <h4 className="font-semibold text-foreground flex items-center space-x-2">
               <MapPin className="h-4 w-4" />
-              <span>Checkpoints ({visits.length}/{checkpoints.length})</span>
+              <span>Checkpoints ({getTotalStats().completed}/{getTotalStats().total})</span>
             </h4>
-            <div className="space-y-2">
-              {checkpoints.map((checkpoint) => {
-                const visit = visits.find(v => v.checkpointId === checkpoint.id);
-                return (
-                  <div
-                    key={checkpoint.id}
-                    className={`p-3 rounded-lg border ${
-                      visit ? 'bg-tactical-green/10 border-tactical-green/30' : 'bg-muted/20 border-muted/30'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-medium text-foreground">{checkpoint.name}</span>
-                      {visit ? (
-                        <Badge variant="outline" className="text-tactical-green border-tactical-green">
-                          Visitado
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-muted-foreground">
-                          Pendente
-                        </Badge>
-                      )}
-                    </div>
-                    {visit && (
-                      <div className="text-xs text-muted-foreground space-y-1">
-                        <div className="flex items-center space-x-1">
-                          <Clock className="h-3 w-3" />
-                          <span>{new Date(visit.visitTime).toLocaleTimeString('pt-BR')}</span>
-                          <span>({Math.floor(visit.duration / 60)}m {visit.duration % 60}s)</span>
-                        </div>
-                        {visit.photos.length > 0 && (
-                          <div className="flex items-center space-x-1">
-                            <Camera className="h-3 w-3" />
-                            <span>{visit.photos.length} foto(s)</span>
-                          </div>
+            {loading ? (
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground">Carregando checkpoints...</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {templateCheckpoints.map((checkpoint) => {
+                  const visit = checkpointVisits.find(v => 
+                    v.checkpoint_id === `template_${checkpoint.id}` || 
+                    v.checkpoint_id === checkpoint.id
+                  );
+                  return (
+                    <div
+                      key={checkpoint.id}
+                      className={`p-3 rounded-lg border ${
+                        visit ? 'bg-tactical-green/10 border-tactical-green/30' : 'bg-muted/20 border-muted/30'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-foreground">{checkpoint.clients.name}</span>
+                        {visit ? (
+                          <Badge variant="outline" className="text-tactical-green border-tactical-green">
+                            Visitado
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-muted-foreground">
+                            Pendente
+                          </Badge>
                         )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                      <div className="text-xs text-muted-foreground mb-2">
+                        {checkpoint.clients.address}
+                      </div>
+                      {visit && (
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <div className="flex items-center space-x-1">
+                            <Clock className="h-3 w-3" />
+                            <span>{new Date(visit.visit_time).toLocaleTimeString('pt-BR')}</span>
+                            <span>({Math.floor(visit.duration / 60)}m {visit.duration % 60}s)</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {templateCheckpoints.length === 0 && (
+                  <p className="text-center text-muted-foreground py-4">
+                    Nenhum checkpoint configurado
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Ocorrências */}
-          {round.incidents.length > 0 && (
+          {incidents.length > 0 && (
             <>
               <Separator />
               <div className="space-y-3">
                 <h4 className="font-semibold text-foreground flex items-center space-x-2">
                   <AlertTriangle className="h-4 w-4 text-tactical-red" />
-                  <span>Ocorrências ({round.incidents.length})</span>
+                  <span>Ocorrências ({incidents.length})</span>
                 </h4>
                 <div className="space-y-2">
-                  {round.incidents.map((incident) => (
+                  {incidents.map((incident) => (
                     <div
                       key={incident.id}
                       className="p-3 rounded-lg border bg-tactical-red/10 border-tactical-red/30"
@@ -198,7 +301,7 @@ const RoundDetails = ({ round, onClose }: RoundDetailsProps) => {
                       <div className="text-xs text-muted-foreground">
                         <div className="flex items-center space-x-1">
                           <Clock className="h-3 w-3" />
-                          <span>{new Date(incident.reportedAt).toLocaleString('pt-BR')}</span>
+                          <span>{new Date(incident.reported_at).toLocaleString('pt-BR')}</span>
                         </div>
                       </div>
                     </div>
@@ -208,21 +311,21 @@ const RoundDetails = ({ round, onClose }: RoundDetailsProps) => {
             </>
           )}
 
-          {/* Trajeto */}
+          {/* Progress Summary */}
           <Separator />
           <div className="space-y-3">
             <h4 className="font-semibold text-foreground flex items-center space-x-2">
               <Navigation className="h-4 w-4" />
-              <span>Trajeto ({round.route.length} pontos)</span>
+              <span>Progresso da Ronda</span>
             </h4>
-            {round.route.length > 0 ? (
-              <div className="text-sm text-muted-foreground">
-                <p>Distância percorrida: ~{Math.floor(round.route.length * 0.5)} km</p>
-                <p>Velocidade média: ~{Math.floor(Math.random() * 20 + 30)} km/h</p>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Nenhum ponto de trajeto registrado</p>
-            )}
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p>Total de checkpoints: {getTotalStats().total}</p>
+              <p>Visitados: {getTotalStats().completed}</p>
+              <p>Progresso: {getTotalStats().progress}%</p>
+              {incidents.length > 0 && (
+                <p className="text-tactical-red">Incidentes: {incidents.length}</p>
+              )}
+            </div>
           </div>
         </div>
       </ScrollArea>

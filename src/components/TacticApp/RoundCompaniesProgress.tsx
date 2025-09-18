@@ -38,6 +38,13 @@ const RoundCompaniesProgress = ({
   const { currentLocation } = useGpsTracking();
   const { stats, getClientProgress, isClientCompleted, getTotalStats } = useClientCheckpointStats(roundId);
 
+  // Debug logs para acompanhar os dados
+  useEffect(() => {
+    console.log('RoundCompaniesProgress - Stats updated:', stats);
+    console.log('RoundCompaniesProgress - Total stats:', getTotalStats());
+    console.log('RoundCompaniesProgress - Clients:', clients);
+  }, [stats, clients]);
+
   const [selectedCheckpoint, setSelectedCheckpoint] = useState<string | null>(null);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [clientForSignature, setClientForSignature] = useState<Client | null>(null);
@@ -352,7 +359,7 @@ const RoundCompaniesProgress = ({
               Criar Ocorrência
             </Button>
             <div className="text-sm text-white/80">
-              {completedCheckpoints} de {totalCheckpoints} checkpoints
+              {getTotalStats().completed} de {getTotalStats().total} checkpoints
             </div>
           </div>
         </div>
@@ -362,7 +369,7 @@ const RoundCompaniesProgress = ({
             {roundInfo?.round_templates?.name || 'Ronda'}
           </h1>
           <div className="text-sm text-white/70 mb-3">
-            {clients.length} {clients.length === 1 ? 'empresa' : 'empresas'} • {totalCheckpoints} {totalCheckpoints === 1 ? 'checkpoint' : 'checkpoints'}
+            {clients.length} {clients.length === 1 ? 'empresa' : 'empresas'} • {getTotalStats().total} {getTotalStats().total === 1 ? 'checkpoint' : 'checkpoints'}
           </div>
           
           <div className="flex justify-between items-center bg-white/10 rounded-lg p-3">
@@ -457,14 +464,14 @@ const RoundCompaniesProgress = ({
         </div>
 
         {/* Footer com resumo */}
-        {totalCheckpoints > 0 && (
+        {getTotalStats().total > 0 && (
           <div className="mt-6 p-4 bg-tactical-green rounded-lg">
             <div className="flex items-center justify-center space-x-2">
               <CheckCircle className="w-5 h-5 text-white" />
               <span className="text-white font-medium">
-                {totalCheckpoints - completedCheckpoints === 0 
+                {getTotalStats().total - getTotalStats().completed === 0 
                   ? "Todos os checkpoints concluídos!"
-                  : `Faltam ${totalCheckpoints - completedCheckpoints} checkpoints`
+                  : `Faltam ${getTotalStats().total - getTotalStats().completed} checkpoints`
                 }
               </span>
             </div>
