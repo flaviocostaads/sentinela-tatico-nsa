@@ -20,6 +20,7 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [error, setError] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -27,6 +28,7 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
   const [showManualInput, setShowManualInput] = useState(false);
   const [validatingCode, setValidatingCode] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [cameraInitialized, setCameraInitialized] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -34,13 +36,13 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
       startCamera();
     } else {
       stopCamera();
-      stopScanning();
+      cleanup();
       resetState();
     }
 
     return () => {
       stopCamera();
-      stopScanning();
+      cleanup();
     };
   }, [open]);
 
@@ -52,6 +54,15 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
     setManualCode("");
     setValidatingCode(false);
     setIsScanning(false);
+    setCameraInitialized(false);
+  };
+
+  const cleanup = () => {
+    stopScanning();
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
   };
 
   const stopScanning = () => {
@@ -109,70 +120,144 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
   };
 
   const startCamera = async () => {
+    console.log("=== Starting Camera Initialization ===");
     setIsLoading(true);
     setError("");
+    setCameraInitialized(false);
+    
+    // Clear any existing timeout
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    
+    // Set timeout for camera initialization (10 seconds)
+    timeoutRef.current = setTimeout(() => {
+      console.log("❌ Camera initialization timeout");
+      setError("Tempo limite esgotado. Use o código manual.");
+      setShowManualInput(true);
+      setIsLoading(false);
+    }, 10000);
     
     try {
-      console.log("Starting simple camera access...");
+      console.log("Requesting camera access...");
       
       // Check if mediaDevices is supported
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("BROWSER_NOT_SUPPORTED");
       }
 
-      // Request camera access with optimized settings
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280, min: 640 },
-          height: { ideal: 720, min: 480 }
-        }
-      });
+      // Request camera access with fallback options
+      let stream: MediaStream | null = null;
+      
+      try {
+        // Try with back camera first
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 }
+          }
+        });
+      } catch (backCameraError) {
+        console.log("Back camera failed, trying front camera...");
+        // Fallback to any available camera
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 }
+          }
+        });
+      }
+      
+      if (!stream) {
+        throw new Error("NO_STREAM");
+      }
       
       streamRef.current = stream;
       setHasPermission(true);
+      console.log("✅ Camera stream obtained");
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         
-        // Wait for video to be ready and start playing
+        // Use multiple events to ensure camera starts properly
+        const handleCameraReady = () => {
+          console.log("✅ Camera ready, clearing timeout");
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          setCameraInitialized(true);
+          setIsLoading(false);
+          
+          // Start scanning after a brief delay
+          setTimeout(() => {
+            startScanning();
+          }, 500);
+        };
+        
+        const handleCameraError = (errorType: string) => {
+          console.error(`❌ Camera error: ${errorType}`);
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+          }
+          setError("Erro ao inicializar câmera. Use o código manual.");
+          setShowManualInput(true);
+          setIsLoading(false);
+        };
+        
+        // Multiple event listeners for better reliability
         videoRef.current.onloadedmetadata = () => {
+          console.log("Video metadata loaded");
           if (videoRef.current) {
             videoRef.current.play()
               .then(() => {
-                console.log("Camera started successfully");
-                setIsLoading(false);
-                // Start QR code scanning after video is playing
-                setTimeout(() => {
-                  startScanning();
-                }, 1000);
+                console.log("Video playing started");
+                handleCameraReady();
               })
               .catch((playError) => {
                 console.error("Video play error:", playError);
-                setError("Erro ao inicializar vídeo. Use o código manual.");
-                setShowManualInput(true);
-                setIsLoading(false);
+                handleCameraError("PLAY_FAILED");
               });
           }
         };
         
-        videoRef.current.onerror = () => {
-          setError("Erro no stream de vídeo. Use o código manual.");
-          setShowManualInput(true);
-          setIsLoading(false);
+        videoRef.current.oncanplay = () => {
+          console.log("Video can play");
+          if (!cameraInitialized) {
+            handleCameraReady();
+          }
         };
+        
+        videoRef.current.onplaying = () => {
+          console.log("Video is playing");
+          if (!cameraInitialized) {
+            handleCameraReady();
+          }
+        };
+        
+        videoRef.current.onerror = () => handleCameraError("VIDEO_ERROR");
+        videoRef.current.onabort = () => handleCameraError("VIDEO_ABORT");
       }
       
     } catch (error: any) {
-      console.error("Camera access error:", error);
+      console.error("❌ Camera access error:", error);
+      
+      // Clear timeout on error
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+      
       setHasPermission(false);
       
       if (error.name === 'NotAllowedError' || error.message === 'PERMISSION_DENIED') {
-        setError("Permissão de câmera negada. Use o código manual ou permita acesso à câmera.");
+        setError("Permissão de câmera negada. Permita o acesso ou use o código manual.");
       } else if (error.name === 'NotFoundError') {
         setError("Nenhuma câmera encontrada. Use o código manual.");
       } else if (error.name === 'NotReadableError') {
-        setError("Câmera em uso por outro app. Use o código manual.");
+        setError("Câmera em uso por outro aplicativo. Use o código manual.");
       } else if (error.message === 'BROWSER_NOT_SUPPORTED') {
         setError("Navegador não suporta câmera. Use o código manual.");
       } else {
@@ -185,7 +270,8 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
   };
 
   const stopCamera = () => {
-    stopScanning();
+    console.log("Stopping camera...");
+    cleanup();
     
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => {
@@ -197,6 +283,8 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+    
+    setCameraInitialized(false);
   };
 
   const validateManualCode = async (code: string): Promise<boolean> => {
@@ -337,7 +425,20 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
             <div className="p-8 text-center">
               <Loader2 className="w-16 h-16 text-primary mx-auto mb-4 animate-spin" />
               <p className="text-sm text-muted-foreground mb-2">Inicializando câmera...</p>
-              <p className="text-xs text-muted-foreground">Aguarde um momento</p>
+              <p className="text-xs text-muted-foreground mb-4">Aguarde enquanto configuramos a câmera</p>
+              
+              {/* Emergency manual code button during loading */}
+              <Button 
+                onClick={() => {
+                  setShowManualInput(true);
+                  setIsLoading(false);
+                }} 
+                variant="outline" 
+                className="w-full"
+              >
+                <Type className="w-4 h-4 mr-2" />
+                Usar código manual agora
+              </Button>
             </div>
           ) : error ? (
             <div className="p-8 text-center">
