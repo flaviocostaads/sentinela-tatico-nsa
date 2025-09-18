@@ -103,50 +103,146 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
   };
 
   const startCamera = async () => {
-    console.log("Starting camera...");
+    console.log("🎥 Starting camera initialization...");
     setCameraState('loading');
     
     try {
       // Check if camera is supported
       if (!navigator.mediaDevices?.getUserMedia) {
+        console.error("❌ getUserMedia not supported");
         throw new Error("Camera not supported");
       }
 
-      // Request camera access
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: { ideal: 'environment' },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+      console.log("📱 Requesting camera access...");
+      
+      // Request camera access with multiple fallback options
+      let stream: MediaStream | null = null;
+      
+      const constraints = [
+        // Try back camera first
+        {
+          video: { 
+            facingMode: { exact: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        },
+        // Fallback to ideal back camera
+        {
+          video: { 
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          }
+        },
+        // Any camera
+        {
+          video: { 
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          }
+        },
+        // Minimal constraints
+        {
+          video: true
         }
-      });
+      ];
+
+      for (const constraint of constraints) {
+        try {
+          console.log("🔍 Trying constraint:", constraint);
+          stream = await navigator.mediaDevices.getUserMedia(constraint);
+          if (stream) {
+            console.log("✅ Camera stream obtained with constraint:", constraint);
+            break;
+          }
+        } catch (err) {
+          console.log("❌ Constraint failed:", constraint, err);
+          continue;
+        }
+      }
+      
+      if (!stream) {
+        throw new Error("No camera stream available");
+      }
       
       streamRef.current = stream;
       
       if (videoRef.current) {
+        console.log("🎬 Setting video source...");
         videoRef.current.srcObject = stream;
         
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play().then(() => {
-            console.log("Camera ready!");
-            setCameraState('ready');
-            
-            // Start QR scanning
-            setTimeout(() => {
-              startScanning();
-            }, 500);
+        // Use Promise-based approach for better error handling
+        const videoReady = new Promise<void>((resolve, reject) => {
+          const video = videoRef.current!;
+          
+          const onLoadedMetadata = () => {
+            console.log("📽️ Video metadata loaded");
+            video.play()
+              .then(() => {
+                console.log("▶️ Video playing");
+                resolve();
+              })
+              .catch(reject);
+          };
+          
+          const onCanPlay = () => {
+            console.log("✅ Video can play");
+            resolve();
+          };
+          
+          const onError = () => {
+            console.error("❌ Video error");
+            reject(new Error("Video playback failed"));
+          };
+          
+          video.addEventListener('loadedmetadata', onLoadedMetadata);
+          video.addEventListener('canplay', onCanPlay);
+          video.addEventListener('error', onError);
+          
+          // Cleanup listeners after success or failure
+          const cleanup = () => {
+            video.removeEventListener('loadedmetadata', onLoadedMetadata);
+            video.removeEventListener('canplay', onCanPlay);
+            video.removeEventListener('error', onError);
+          };
+          
+          // Set timeout for video initialization
+          setTimeout(() => {
+            cleanup();
+            reject(new Error("Video initialization timeout"));
+          }, 5000);
+          
+          // Cleanup on resolve/reject
+          Promise.resolve().then(() => {
+            setTimeout(cleanup, 100);
           });
-        };
+        });
+        
+        await videoReady;
+        
+        console.log("🎯 Camera ready! Setting state and starting scan...");
+        setCameraState('ready');
+        
+        // Start QR scanning after a brief delay
+        setTimeout(() => {
+          startScanning();
+        }, 300);
       }
       
     } catch (error: any) {
-      console.error("Camera error:", error);
-      let errorMessage = "Erro ao acessar câmera.";
+      console.error("💥 Camera initialization failed:", error);
+      
+      let errorMessage = "Erro ao inicializar câmera.";
       
       if (error.name === 'NotAllowedError') {
-        errorMessage = "Permissão de câmera negada.";
+        errorMessage = "Permissão de câmera negada. Clique em 'Permitir' quando solicitado.";
       } else if (error.name === 'NotFoundError') {
-        errorMessage = "Nenhuma câmera encontrada.";
+        errorMessage = "Nenhuma câmera encontrada no dispositivo.";
+      } else if (error.name === 'NotReadableError') {
+        errorMessage = "Câmera está sendo usada por outro aplicativo.";
+      } else if (error.message?.includes('constraint')) {
+        errorMessage = "Configuração de câmera não suportada.";
       }
       
       setError(errorMessage);
@@ -176,16 +272,17 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
 
   const validateManualCode = async (code: string): Promise<boolean> => {
     try {
-      console.log("=== Manual Code Validation ===");
-      console.log("Validating code:", code);
+      console.log("🔍 === Manual Code Validation ===");
+      console.log("🔢 Validating code:", code);
       
       // First check if it's a 9-digit code
       if (!/^\d{9}$/.test(code)) {
-        console.log("Invalid format: not 9 digits");
+        console.log("❌ Invalid format: not 9 digits");
         return false;
       }
 
       // Search for this manual code in checkpoints table
+      console.log("🗃️ Searching in checkpoints table...");
       const { data: checkpoints, error } = await supabase
         .from("checkpoints")
         .select(`
@@ -193,42 +290,29 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
           name, 
           manual_code,
           client_id,
-          clients (name)
+          clients!inner (
+            id,
+            name
+          )
         `)
         .eq("manual_code", code);
 
       if (error) {
-        console.error("Database error:", error);
-        throw error;
+        console.error("💥 Database error:", error);
+        return false; // Don't throw, just return false
       }
 
-      console.log("Found checkpoints with this manual code:", checkpoints);
+      console.log("📋 Database query result:", checkpoints);
 
       if (checkpoints && checkpoints.length > 0) {
-        // Valid manual code found in database
-        console.log("✅ Manual code exists in database");
+        console.log("✅ Manual code found in database:", checkpoints[0]);
         return true;
       }
 
-      // Also check in client-based systems (for flexibility)
-      const { data: clients, error: clientError } = await supabase
-        .from("clients")
-        .select("id, name")
-        .ilike("name", `%${code}%`);
-
-      if (clientError) {
-        console.error("Client search error:", clientError);
-      }
-
-      if (clients && clients.length > 0) {
-        console.log("✅ Found matching clients for code");
-        return true;
-      }
-
-      console.log("❌ Manual code not found in database");
+      console.log("❌ Manual code not found in checkpoints table");
       return false;
     } catch (error) {
-      console.error("Error validating manual code:", error);
+      console.error("💥 Unexpected error validating manual code:", error);
       return false;
     }
   };
