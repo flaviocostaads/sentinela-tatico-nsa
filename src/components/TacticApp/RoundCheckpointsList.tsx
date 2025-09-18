@@ -199,12 +199,12 @@ const RoundCheckpointsList = ({
             return (
               <Card 
                 key={checkpoint.id} 
-                className={`tactical-card transition-all cursor-pointer ${
+                className={`transition-all cursor-pointer border-2 ${
                   isCompleted 
-                    ? 'border-l-4 border-l-tactical-green bg-tactical-green/5' 
+                    ? 'border-tactical-green bg-tactical-green/10 shadow-lg' 
                     : canAccess 
-                    ? 'border-l-4 border-l-tactical-blue hover:shadow-lg' 
-                    : 'opacity-60 cursor-not-allowed'
+                    ? 'border-tactical-blue bg-tactical-blue/10 hover:shadow-lg hover:border-tactical-blue/80' 
+                    : 'border-tactical-red bg-tactical-red/10 opacity-80 cursor-not-allowed'
                 }`}
                 onClick={() => canAccess && !isCompleted && onCheckpointSelect(checkpoint.id)}
               >
@@ -213,11 +213,11 @@ const RoundCheckpointsList = ({
                     <div className="flex items-center space-x-3">
                       <div className="flex-shrink-0">
                         {isCompleted ? (
-                          <CheckCircle className="w-6 h-6 text-tactical-green" />
+                          <CheckCircle className="w-6 h-6 text-tactical-green fill-tactical-green/20" />
                         ) : canAccess ? (
                           <Circle className="w-6 h-6 text-tactical-blue" />
                         ) : (
-                          <Circle className="w-6 h-6 text-muted-foreground" />
+                          <Circle className="w-6 h-6 text-tactical-red" />
                         )}
                       </div>
                       
@@ -255,13 +255,13 @@ const RoundCheckpointsList = ({
                     
                     <div className="flex-shrink-0">
                       {isCompleted ? (
-                        <Badge className="bg-tactical-green text-white">
-                          Concluído
+                        <Badge className="bg-tactical-green hover:bg-tactical-green text-white border-tactical-green">
+                          ✓ Concluído
                         </Badge>
                       ) : canAccess ? (
                         <Button
                           size="sm"
-                          className="bg-tactical-blue hover:bg-tactical-blue/90 text-white"
+                          className="bg-tactical-blue hover:bg-tactical-blue/90 text-white border-tactical-blue shadow-lg"
                           onClick={(e) => {
                             e.stopPropagation();
                             onCheckpointSelect(checkpoint.id);
@@ -271,8 +271,8 @@ const RoundCheckpointsList = ({
                           Escanear QR
                         </Button>
                       ) : (
-                        <Badge variant="secondary">
-                          Bloqueado
+                        <Badge className="bg-tactical-red hover:bg-tactical-red text-white border-tactical-red">
+                          ⏳ Aguardando
                         </Badge>
                       )}
                     </div>

@@ -785,19 +785,37 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
             <CardTitle>Pontos Obrigatórios</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {checkpoints.map((checkpoint, index) => (
+            {checkpoints.map((checkpoint, index) => {
+              const isCurrentCheckpoint = index === currentCheckpointIndex;
+              const canAccess = hasLeftBase && canStartCheckpoints && isCurrentCheckpoint;
+              
+              return (
               <div 
                 key={checkpoint.id}
-                className="flex items-center justify-between p-4 border rounded-lg"
+                className={`flex items-center justify-between p-4 border-2 rounded-lg transition-all ${
+                  checkpoint.visited
+                    ? 'border-tactical-green bg-tactical-green/10'
+                    : canAccess
+                    ? 'border-tactical-blue bg-tactical-blue/10 shadow-lg'
+                    : 'border-tactical-red bg-tactical-red/5'
+                }`}
               >
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center space-x-2">
                     {checkpoint.visited ? (
-                      <CheckCircle className="w-5 h-5 text-tactical-green" />
+                      <CheckCircle className="w-5 h-5 text-tactical-green fill-tactical-green/20" />
+                    ) : canAccess ? (
+                      <Circle className="w-5 h-5 text-tactical-blue" />
                     ) : (
-                      <Circle className="w-5 h-5 text-muted-foreground" />
+                      <Circle className="w-5 h-5 text-tactical-red" />
                     )}
-                    <span className="w-6 h-6 bg-muted rounded-full flex items-center justify-center text-sm">
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-sm font-medium ${
+                      checkpoint.visited 
+                        ? 'bg-tactical-green text-white' 
+                        : canAccess 
+                        ? 'bg-tactical-blue text-white' 
+                        : 'bg-tactical-red text-white'
+                    }`}>
                       {index + 1}
                     </span>
                   </div>
@@ -817,28 +835,28 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
 
                 {!checkpoint.visited && (
                   <div className="flex space-x-2">
-                    {hasLeftBase && canStartCheckpoints && index === currentCheckpointIndex ? (
+                    {canAccess ? (
                       <Button
                         onClick={() => handleManualCheckin(checkpoint)}
                         size="sm"
-                        className="bg-tactical-blue hover:bg-tactical-blue/90"
+                        className="bg-tactical-blue hover:bg-tactical-blue/90 text-white border-tactical-blue shadow-lg"
                       >
                         <QrCode className="w-4 h-4 mr-2" />
                         Escanear QR
                       </Button>
                     ) : !hasLeftBase ? (
-                      <Badge variant="outline" className="text-xs">
-                        Aguardando saída da base
+                      <Badge className="bg-tactical-red text-white border-tactical-red">
+                        ⏳ Aguardando saída da base
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-xs">
-                        {index < currentCheckpointIndex ? 'Concluído' : 'Aguardando'}
+                      <Badge className="bg-tactical-red text-white border-tactical-red">
+                        {index < currentCheckpointIndex ? '✓ Concluído' : '⏳ Aguardando'}
                       </Badge>
                     )}
                   </div>
                 )}
               </div>
-            ))}
+            )})}
           </CardContent>
         </Card>
 

@@ -185,11 +185,11 @@ const RoundCompaniesProgress = ({
 
   const getClientStatus = (client: Client) => {
     if (isClientCompleted(client.id)) {
-      return { text: "Concluído", color: "bg-tactical-green" };
+      return { text: "✓ Concluído", color: "bg-tactical-green border-tactical-green text-white" };
     } else if (stats[client.id]?.completedCheckpoints > 0) {
-      return { text: "Em andamento", color: "bg-tactical-blue" };
+      return { text: "🔄 Em andamento", color: "bg-tactical-blue border-tactical-blue text-white" };
     } else {
-      return { text: "Aguardando", color: "bg-slate-500" };
+      return { text: "⏳ Aguardando", color: "bg-tactical-red border-tactical-red text-white" };
     }
   };
 
@@ -350,8 +350,14 @@ const RoundCompaniesProgress = ({
             return (
               <Card 
                 key={client.id}
-                className={`bg-slate-800 border-slate-700 transition-all cursor-pointer hover:border-slate-600 ${
-                  !canAccess ? 'opacity-60 cursor-not-allowed' : ''
+                className={`transition-all cursor-pointer border-2 ${
+                  !canAccess 
+                    ? 'bg-tactical-red/10 border-tactical-red opacity-80 cursor-not-allowed' 
+                    : isClientCompleted(client.id)
+                    ? 'bg-tactical-green/10 border-tactical-green hover:border-tactical-green/80 shadow-lg'
+                    : stats[client.id]?.completedCheckpoints > 0
+                    ? 'bg-tactical-blue/10 border-tactical-blue hover:border-tactical-blue/80 shadow-lg'
+                    : 'bg-slate-800 border-tactical-red hover:border-tactical-red/80'
                 }`}
                 onClick={() => canAccess && handleClientSelect(client)}
               >
