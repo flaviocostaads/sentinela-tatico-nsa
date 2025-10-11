@@ -83,11 +83,11 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
       }
 
       if (checkpointData) {
-        console.log("Found real checkpoint:", checkpointData);
+        console.log("Found real checkpoint with manual_code:", checkpointData.manual_code);
         setCheckpoint(checkpointData);
         setupChecklist(checkpointData.checklist_items as any[] || null);
       } else {
-        // Fallback: try to get from template checkpoints (handle both prefixed and non-prefixed IDs)
+        // Fallback: try to get from template checkpoints
         console.log("No real checkpoint found, trying template checkpoints...");
         
         // Remove 'template_' prefix if present, otherwise use ID as-is
@@ -111,21 +111,44 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
         }
 
         if (templateData && templateData.clients) {
-          console.log("Found template checkpoint:", templateData);
-          const formattedData = {
-            id: checkpointId,
-            name: templateData.clients.name,
-            description: `Checkpoint em ${templateData.clients.name}`,
-            checklist_items: null,
-            clients: {
-              id: templateData.clients.id || templateId,
+          console.log("Found template checkpoint, looking for real checkpoint by client_id:", templateData.client_id);
+          
+          // Try to find the real checkpoint for this client
+          const { data: realCheckpoint } = await supabase
+            .from("checkpoints")
+            .select("*")
+            .eq("client_id", templateData.client_id)
+            .eq("active", true)
+            .maybeSingle();
+
+          if (realCheckpoint) {
+            console.log("Found real checkpoint by client_id with manual_code:", realCheckpoint.manual_code);
+            setCheckpoint({
+              ...realCheckpoint,
+              clients: {
+                id: templateData.clients.id,
+                name: templateData.clients.name,
+                address: templateData.clients.address
+              }
+            });
+            setupChecklist(realCheckpoint.checklist_items as any[] || null);
+          } else {
+            console.log("No real checkpoint found for client, using template data");
+            const formattedData = {
+              id: checkpointId,
               name: templateData.clients.name,
-              address: templateData.clients.address
-            },
-            required_signature: templateData.required_signature
-          };
-          setCheckpoint(formattedData);
-          setupChecklist(null);
+              description: `Checkpoint em ${templateData.clients.name}`,
+              checklist_items: null,
+              clients: {
+                id: templateData.clients.id || templateId,
+                name: templateData.clients.name,
+                address: templateData.clients.address
+              },
+              required_signature: templateData.required_signature
+            };
+            setCheckpoint(formattedData);
+            setupChecklist(null);
+          }
         } else {
           console.error("No checkpoint or template data found for ID:", checkpointId);
           throw new Error(`Checkpoint não encontrado: ${checkpointId}`);

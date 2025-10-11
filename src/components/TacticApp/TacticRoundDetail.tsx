@@ -144,18 +144,48 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
 
         if (templateError) throw templateError;
 
-        // Convert template checkpoints to regular checkpoints format
-        const formattedCheckpoints = (templateCheckpoints || []).map((tc, index) => ({
-          id: `template_${tc.id}`,
-          name: tc.clients.name,
-          description: `Ronda em ${tc.clients.name}`,
-          order_index: tc.order_index,
-          client_id: tc.client_id,
-          lat: null,
-          lng: null,
-          geofence_radius: 50,
-          qr_code: `client_${tc.client_id}` // Generate QR code based on client
-        }));
+        // For each template checkpoint, fetch the real checkpoint data from checkpoints table
+        const formattedCheckpoints = await Promise.all(
+          (templateCheckpoints || []).map(async (tc) => {
+            // Try to find the real checkpoint for this client
+            const { data: realCheckpoint } = await supabase
+              .from("checkpoints")
+              .select("id, name, description, lat, lng, geofence_radius, qr_code, manual_code")
+              .eq("client_id", tc.client_id)
+              .eq("active", true)
+              .maybeSingle();
+
+            // Use real checkpoint data if available, otherwise use template data
+            if (realCheckpoint) {
+              return {
+                id: realCheckpoint.id, // Use real ID
+                name: realCheckpoint.name,
+                description: realCheckpoint.description || `Ronda em ${tc.clients.name}`,
+                order_index: tc.order_index,
+                client_id: tc.client_id,
+                lat: realCheckpoint.lat,
+                lng: realCheckpoint.lng,
+                geofence_radius: realCheckpoint.geofence_radius || 50,
+                qr_code: realCheckpoint.qr_code,
+                manual_code: realCheckpoint.manual_code
+              };
+            } else {
+              // Fallback to template data
+              return {
+                id: `template_${tc.id}`,
+                name: tc.clients.name,
+                description: `Ronda em ${tc.clients.name}`,
+                order_index: tc.order_index,
+                client_id: tc.client_id,
+                lat: null,
+                lng: null,
+                geofence_radius: 50,
+                qr_code: `client_${tc.client_id}`,
+                manual_code: null
+              };
+            }
+          })
+        );
 
         // Fetch visits for template-based checkpoints
         const { data: visitsData, error: visitsError } = await supabase
