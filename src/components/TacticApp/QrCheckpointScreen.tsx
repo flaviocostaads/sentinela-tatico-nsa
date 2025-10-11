@@ -73,17 +73,21 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
         .from("checkpoints")
         .select(`
           *,
-          clients (name, address)
+          clients!inner (id, name, address)
         `)
         .eq("id", checkpointId)
         .maybeSingle();
 
-      if (checkpointError && checkpointError.code !== 'PGRST116') {
+      if (checkpointError) {
         console.error("Checkpoint query error:", checkpointError);
+        if (checkpointError.code !== 'PGRST116') {
+          // Not a "not found" error, so it's a real problem
+          throw checkpointError;
+        }
       }
 
       if (checkpointData) {
-        console.log("Found real checkpoint with manual_code:", checkpointData.manual_code);
+        console.log("✅ Found real checkpoint:", checkpointData);
         setCheckpoint(checkpointData);
         setupChecklist(checkpointData.checklist_items as any[] || null);
       } else {
@@ -101,28 +105,35 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
           .from("round_template_checkpoints")
           .select(`
             *,
-            clients (id, name, address)
+            clients!inner (id, name, address)
           `)
           .eq("id", templateId)
           .maybeSingle();
 
         if (templateError) {
           console.error("Template checkpoint query error:", templateError);
+          if (templateError.code !== 'PGRST116') {
+            throw templateError;
+          }
         }
 
         if (templateData && templateData.clients) {
-          console.log("Found template checkpoint, looking for real checkpoint by client_id:", templateData.client_id);
+          console.log("✅ Found template checkpoint:", templateData);
           
           // Try to find the real checkpoint for this client
-          const { data: realCheckpoint } = await supabase
+          const { data: realCheckpoint, error: realError } = await supabase
             .from("checkpoints")
             .select("*")
             .eq("client_id", templateData.client_id)
             .eq("active", true)
             .maybeSingle();
 
+          if (realError) {
+            console.error("Error fetching real checkpoint:", realError);
+          }
+
           if (realCheckpoint) {
-            console.log("Found real checkpoint by client_id with manual_code:", realCheckpoint.manual_code);
+            console.log("✅ Found real checkpoint by client_id:", realCheckpoint);
             setCheckpoint({
               ...realCheckpoint,
               clients: {
@@ -133,14 +144,14 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
             });
             setupChecklist(realCheckpoint.checklist_items as any[] || null);
           } else {
-            console.log("No real checkpoint found for client, using template data");
+            console.log("⚠️ No real checkpoint found for client, using template data");
             const formattedData = {
               id: checkpointId,
               name: templateData.clients.name,
               description: `Checkpoint em ${templateData.clients.name}`,
               checklist_items: null,
               clients: {
-                id: templateData.clients.id || templateId,
+                id: templateData.clients.id,
                 name: templateData.clients.name,
                 address: templateData.clients.address
               },
@@ -150,17 +161,18 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
             setupChecklist(null);
           }
         } else {
-          console.error("No checkpoint or template data found for ID:", checkpointId);
-          throw new Error(`Checkpoint não encontrado: ${checkpointId}`);
+          console.error("❌ No checkpoint or template data found for ID:", checkpointId);
+          throw new Error(`Checkpoint não encontrado`);
         }
       }
-    } catch (error) {
-      console.error("Error fetching checkpoint:", error);
+    } catch (error: any) {
+      console.error("💥 Error fetching checkpoint:", error);
       toast({
         title: "Erro",
-        description: "Erro ao carregar dados do checkpoint",
+        description: error.message || "Erro ao carregar dados do checkpoint",
         variant: "destructive",
       });
+      // Don't throw - let component remain in error state but functional
     } finally {
       setLoading(false);
     }

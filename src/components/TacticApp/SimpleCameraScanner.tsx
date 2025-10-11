@@ -117,140 +117,127 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
 
       console.log("📱 Requesting camera access...");
       
-      // Request camera access with multiple fallback options
-      let stream: MediaStream | null = null;
-      
+      // Simplified camera constraints with fallbacks
       const constraints = [
-        // Try back camera first
-        {
-          video: { 
-            facingMode: { exact: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        },
-        // Fallback to ideal back camera
-        {
-          video: { 
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 640 },
-            height: { ideal: 480 }
-          }
-        },
-        // Any camera
-        {
-          video: { 
-            width: { ideal: 640 },
-            height: { ideal: 480 }
-          }
-        },
-        // Minimal constraints
-        {
-          video: true
-        }
+        { video: { facingMode: 'environment' } },
+        { video: true }
       ];
+
+      let stream: MediaStream | null = null;
+      let lastError: Error | null = null;
 
       for (const constraint of constraints) {
         try {
           console.log("🔍 Trying constraint:", constraint);
           stream = await navigator.mediaDevices.getUserMedia(constraint);
           if (stream) {
-            console.log("✅ Camera stream obtained with constraint:", constraint);
+            console.log("✅ Camera stream obtained");
             break;
           }
-        } catch (err) {
-          console.log("❌ Constraint failed:", constraint, err);
+        } catch (err: any) {
+          console.log("❌ Constraint failed:", err.message);
+          lastError = err;
           continue;
         }
       }
       
       if (!stream) {
-        throw new Error("No camera stream available");
+        throw lastError || new Error("Não foi possível acessar a câmera");
       }
       
       streamRef.current = stream;
       
-      if (videoRef.current) {
-        console.log("🎬 Setting video source...");
-        videoRef.current.srcObject = stream;
-        
-        // Use Promise-based approach for better error handling
-        const videoReady = new Promise<void>((resolve, reject) => {
-          const video = videoRef.current!;
+      if (!videoRef.current) {
+        throw new Error("Video element not found");
+      }
+      
+      const video = videoRef.current;
+      console.log("🎬 Setting video source...");
+      video.srcObject = stream;
+      
+      // Simplified video initialization
+      try {
+        await new Promise<void>((resolve, reject) => {
+          let resolved = false;
           
-          const onLoadedMetadata = () => {
-            console.log("📽️ Video metadata loaded");
-            video.play()
-              .then(() => {
-                console.log("▶️ Video playing");
-                resolve();
-              })
-              .catch(reject);
-          };
-          
-          const onCanPlay = () => {
-            console.log("✅ Video can play");
-            resolve();
+          const onSuccess = () => {
+            if (!resolved) {
+              resolved = true;
+              console.log("✅ Video ready");
+              resolve();
+            }
           };
           
           const onError = (e: Event) => {
-            console.error("❌ Video error:", e);
-            reject(new Error("Video playback failed"));
+            if (!resolved) {
+              resolved = true;
+              console.error("❌ Video error:", e);
+              reject(new Error("Erro ao iniciar vídeo"));
+            }
           };
           
-          video.addEventListener('loadedmetadata', onLoadedMetadata);
-          video.addEventListener('canplay', onCanPlay);
-          video.addEventListener('error', onError);
+          video.addEventListener('loadedmetadata', () => {
+            console.log("📽️ Metadata loaded");
+            video.play()
+              .then(onSuccess)
+              .catch(onError);
+          }, { once: true });
           
-          // Cleanup listeners after success or failure
-          const cleanup = () => {
-            video.removeEventListener('loadedmetadata', onLoadedMetadata);
-            video.removeEventListener('canplay', onCanPlay);
-            video.removeEventListener('error', onError);
-          };
+          video.addEventListener('canplay', onSuccess, { once: true });
+          video.addEventListener('error', onError, { once: true });
           
-          // Set timeout for video initialization
+          // Timeout
           setTimeout(() => {
-            cleanup();
-            reject(new Error("Video initialization timeout"));
-          }, 8000); // Increased timeout
-          
-          // Cleanup on resolve/reject
-          Promise.resolve().then(() => {
-            setTimeout(cleanup, 100);
-          });
+            if (!resolved) {
+              resolved = true;
+              reject(new Error("Timeout ao inicializar câmera"));
+            }
+          }, 5000);
         });
         
-        await videoReady;
-        
-        console.log("🎯 Camera ready! Setting state and starting scan...");
+        console.log("🎯 Camera ready! Starting scan...");
         setCameraState('ready');
         
-        // Start QR scanning after a brief delay
+        // Start scanning immediately
         setTimeout(() => {
-          startScanning();
-        }, 500); // Increased delay for stability
+          if (videoRef.current?.readyState === videoRef.current?.HAVE_ENOUGH_DATA) {
+            startScanning();
+          }
+        }, 300);
+        
+      } catch (videoError) {
+        throw new Error("Erro ao iniciar visualização da câmera");
       }
       
     } catch (error: any) {
       console.error("💥 Camera initialization failed:", error);
       
-      let errorMessage = "Erro ao inicializar câmera.";
+      // Stop any streams
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
       
-      if (error.name === 'NotAllowedError') {
-        errorMessage = "Permissão de câmera negada. Clique em 'Permitir' quando solicitado.";
+      let errorMessage = "Erro ao inicializar câmera";
+      
+      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+        errorMessage = "Permissão de câmera negada. Permita o acesso nas configurações.";
       } else if (error.name === 'NotFoundError') {
         errorMessage = "Nenhuma câmera encontrada no dispositivo.";
       } else if (error.name === 'NotReadableError') {
-        errorMessage = "Câmera está sendo usada por outro aplicativo.";
-      } else if (error.message?.includes('constraint')) {
-        errorMessage = "Configuração de câmera não suportada.";
-      } else if (error.message?.includes('timeout')) {
-        errorMessage = "Tempo esgotado ao inicializar câmera. Tente novamente.";
+        errorMessage = "Câmera em uso por outro aplicativo.";
+      } else if (error.message) {
+        errorMessage = error.message;
       }
       
       setError(errorMessage);
       setCameraState('error');
+      
+      toast({
+        title: "Erro na câmera",
+        description: errorMessage,
+        variant: "destructive",
+      });
     }
   };
 
