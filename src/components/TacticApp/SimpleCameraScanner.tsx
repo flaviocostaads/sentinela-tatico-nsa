@@ -103,21 +103,28 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
   };
 
   const startCamera = async () => {
-    console.log("🎥 Starting camera initialization...");
+    console.log("🎥 === Camera Initialization START ===");
     setCameraState('loading');
     
     try {
+      // Wait a tiny bit for DOM to be ready
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Check if video element exists
+      if (!videoRef.current) {
+        console.error("❌ videoRef.current is null - element not mounted yet");
+        throw new Error("Elemento de vídeo não encontrado. Aguarde e tente novamente.");
+      }
+      
       // Check if camera is supported
       if (!navigator.mediaDevices?.getUserMedia) {
         console.error("❌ getUserMedia not supported");
-        setCameraState('error');
-        setError("Câmera não suportada neste dispositivo");
-        return;
+        throw new Error("Câmera não suportada neste dispositivo");
       }
 
       console.log("📱 Requesting camera access...");
       
-      // Simplified camera constraints with fallbacks
+      // Simplified camera constraints
       const constraints = [
         { video: { facingMode: 'environment' } },
         { video: true }
@@ -128,14 +135,14 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
 
       for (const constraint of constraints) {
         try {
-          console.log("🔍 Trying constraint:", constraint);
+          console.log("🔍 Trying:", JSON.stringify(constraint));
           stream = await navigator.mediaDevices.getUserMedia(constraint);
           if (stream) {
-            console.log("✅ Camera stream obtained");
+            console.log("✅ Stream obtained:", stream.active, stream.getTracks().length, "tracks");
             break;
           }
         } catch (err: any) {
-          console.log("❌ Constraint failed:", err.message);
+          console.log("❌ Failed:", err.name, err.message);
           lastError = err;
           continue;
         }
@@ -147,85 +154,104 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
       
       streamRef.current = stream;
       
-      if (!videoRef.current) {
-        throw new Error("Video element not found");
-      }
-      
       const video = videoRef.current;
-      console.log("🎬 Setting video source...");
+      console.log("🎬 Connecting stream to video element...");
       video.srcObject = stream;
       
-      // Simplified video initialization
-      try {
-        await new Promise<void>((resolve, reject) => {
-          let resolved = false;
-          
-          const onSuccess = () => {
-            if (!resolved) {
-              resolved = true;
-              console.log("✅ Video ready");
-              resolve();
-            }
-          };
-          
-          const onError = (e: Event) => {
-            if (!resolved) {
-              resolved = true;
-              console.error("❌ Video error:", e);
-              reject(new Error("Erro ao iniciar vídeo"));
-            }
-          };
-          
-          video.addEventListener('loadedmetadata', () => {
-            console.log("📽️ Metadata loaded");
-            video.play()
-              .then(onSuccess)
-              .catch(onError);
-          }, { once: true });
-          
-          video.addEventListener('canplay', onSuccess, { once: true });
-          video.addEventListener('error', onError, { once: true });
-          
-          // Timeout
-          setTimeout(() => {
-            if (!resolved) {
-              resolved = true;
-              reject(new Error("Timeout ao inicializar câmera"));
-            }
-          }, 5000);
-        });
+      // Wait for video to be ready
+      await new Promise<void>((resolve, reject) => {
+        let resolved = false;
         
-        console.log("🎯 Camera ready! Starting scan...");
-        setCameraState('ready');
+        const cleanup = () => {
+          video.removeEventListener('loadedmetadata', onMetadata);
+          video.removeEventListener('canplay', onCanPlay);
+          video.removeEventListener('error', onError);
+        };
         
-        // Start scanning immediately
-        setTimeout(() => {
-          if (videoRef.current?.readyState === videoRef.current?.HAVE_ENOUGH_DATA) {
-            startScanning();
+        const onMetadata = () => {
+          console.log("📽️ Metadata loaded, attempting play...");
+          video.play()
+            .then(() => {
+              if (!resolved) {
+                resolved = true;
+                console.log("▶️ Video playing");
+                cleanup();
+                resolve();
+              }
+            })
+            .catch((err) => {
+              if (!resolved) {
+                resolved = true;
+                console.error("❌ Play failed:", err);
+                cleanup();
+                reject(err);
+              }
+            });
+        };
+        
+        const onCanPlay = () => {
+          if (!resolved) {
+            resolved = true;
+            console.log("✅ Video can play");
+            cleanup();
+            resolve();
           }
-        }, 300);
+        };
         
-      } catch (videoError) {
-        throw new Error("Erro ao iniciar visualização da câmera");
-      }
+        const onError = (e: Event) => {
+          if (!resolved) {
+            resolved = true;
+            console.error("❌ Video error:", e);
+            cleanup();
+            reject(new Error("Erro no elemento de vídeo"));
+          }
+        };
+        
+        video.addEventListener('loadedmetadata', onMetadata);
+        video.addEventListener('canplay', onCanPlay);
+        video.addEventListener('error', onError);
+        
+        // Timeout
+        setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            cleanup();
+            reject(new Error("Timeout: câmera não respondeu"));
+          }
+        }, 8000);
+      });
+      
+      console.log("✅ Camera ready!");
+      setCameraState('ready');
+      
+      // Start scanning after short delay
+      setTimeout(() => {
+        if (videoRef.current?.readyState === 4) { // HAVE_ENOUGH_DATA
+          console.log("🎯 Starting QR scan...");
+          startScanning();
+        } else {
+          console.log("⚠️ Video not ready yet, waiting...");
+          setTimeout(() => startScanning(), 500);
+        }
+      }, 500);
       
     } catch (error: any) {
-      console.error("💥 Camera initialization failed:", error);
+      console.error("💥 Camera error:", error);
       
-      // Stop any streams
+      // Cleanup
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
       }
       
-      let errorMessage = "Erro ao inicializar câmera";
+      let errorMessage = "Erro ao acessar câmera";
       
       if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        errorMessage = "Permissão de câmera negada. Permita o acesso nas configurações.";
+        errorMessage = "Permissão negada. Permita acesso à câmera nas configurações.";
       } else if (error.name === 'NotFoundError') {
-        errorMessage = "Nenhuma câmera encontrada no dispositivo.";
+        errorMessage = "Nenhuma câmera encontrada.";
       } else if (error.name === 'NotReadableError') {
-        errorMessage = "Câmera em uso por outro aplicativo.";
+        errorMessage = "Câmera em uso por outro app.";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -263,59 +289,62 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
 
   const validateManualCode = async (code: string): Promise<boolean> => {
     try {
-      console.log("🔍 === Manual Code Validation ===");
-      console.log("🔢 Validating code:", code);
+      console.log("🔍 === Manual Code Validation START ===");
+      console.log("🔢 Input code:", code);
+      console.log("📏 Code length:", code.length);
+      console.log("🔤 Code type:", typeof code);
       
-      // First check if it's a 9-digit code
-      if (!/^\d{9}$/.test(code)) {
+      // Ensure code is a string and trim it
+      const cleanCode = String(code).trim();
+      console.log("🧹 Cleaned code:", cleanCode);
+      
+      // Check if it's a 9-digit code
+      if (!/^\d{9}$/.test(cleanCode)) {
         console.log("❌ Invalid format: not 9 digits");
         return false;
       }
 
-      // Search for this manual code in checkpoints table (active checkpoints only)
+      // Search for this manual code in checkpoints table
       console.log("🗃️ Searching in checkpoints table...");
       const { data: checkpoints, error } = await supabase
         .from("checkpoints")
-        .select(`
-          id, 
-          name, 
-          manual_code,
-          client_id,
-          active,
-          clients (
-            id,
-            name
-          )
-        `)
-        .eq("manual_code", code)
+        .select("id, name, manual_code, client_id, active")
+        .eq("manual_code", cleanCode)
         .eq("active", true);
+
+      console.log("📊 Query response - data:", checkpoints);
+      console.log("📊 Query response - error:", error);
 
       if (error) {
         console.error("💥 Database error:", error);
+        // Even with error, log more details
+        console.error("Error code:", error.code);
+        console.error("Error message:", error.message);
+        console.error("Error details:", error.details);
         return false;
       }
 
-      console.log("📋 Database query result:", checkpoints);
-
       if (checkpoints && checkpoints.length > 0) {
         const checkpoint = checkpoints[0];
-        console.log("✅ Manual code found in database:", checkpoint);
-        
-        // Additional validation - check if this checkpoint belongs to the current client
-        if (checkpoint.clients?.name) {
-          console.log("🏢 Checkpoint belongs to:", checkpoint.clients.name);
-          console.log("🎯 Expected client:", checkpoint?.clients?.name);
-          return true;
-        } else {
-          console.log("⚠️ Checkpoint has no associated client");
-          return true; // Allow it anyway for now
-        }
+        console.log("✅ SUCCESS! Manual code found:", checkpoint);
+        console.log("✅ Checkpoint ID:", checkpoint.id);
+        console.log("✅ Checkpoint name:", checkpoint.name);
+        return true;
       }
 
-      console.log("❌ Manual code not found in checkpoints table");
+      console.log("❌ No checkpoints found for code:", cleanCode);
+      
+      // Additional debugging: try to list some codes to verify
+      const { data: allCodes } = await supabase
+        .from("checkpoints")
+        .select("manual_code")
+        .eq("active", true)
+        .limit(5);
+      console.log("📝 Sample of manual codes in database:", allCodes);
+      
       return false;
     } catch (error) {
-      console.error("💥 Unexpected error validating manual code:", error);
+      console.error("💥 EXCEPTION in validateManualCode:", error);
       return false;
     }
   };

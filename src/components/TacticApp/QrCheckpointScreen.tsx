@@ -448,51 +448,53 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
 
   const validateManualCode = async (code: string): Promise<boolean> => {
     try {
-      console.log("=== Manual Code Validation ===");
-      console.log("Validating manual code:", code);
-      console.log("Current checkpoint client:", checkpoint?.clients?.name);
+      console.log("🔍 === Manual Code Validation in QrCheckpointScreen ===");
+      console.log("🔢 Input code:", code);
+      console.log("📏 Code length:", code.length);
       
-      // Check if this manual code exists in checkpoints table
-      const { data: checkpoints, error } = await supabase
-        .from("checkpoints")
-        .select(`
-          id, 
-          name, 
-          manual_code,
-          client_id,
-          active,
-          clients (name)
-        `)
-        .eq("manual_code", code)
-        .eq("active", true);
-
-      if (error) {
-        console.error("Database error:", error);
-        throw error;
+      // Ensure code is a string and trim it
+      const cleanCode = String(code).trim();
+      console.log("🧹 Cleaned code:", cleanCode);
+      
+      // Check format
+      if (!/^\d{9}$/.test(cleanCode)) {
+        console.log("❌ Invalid format: not 9 digits");
+        return false;
       }
 
-      console.log("Found checkpoints for manual code:", checkpoints);
+      // Check if this manual code exists in checkpoints table
+      console.log("🗃️ Searching in database...");
+      const { data: checkpoints, error } = await supabase
+        .from("checkpoints")
+        .select("id, name, manual_code, client_id, active")
+        .eq("manual_code", cleanCode)
+        .eq("active", true);
+
+      console.log("📊 Database response:", { data: checkpoints, error });
+
+      if (error) {
+        console.error("💥 Database error:", error);
+        return false;
+      }
 
       if (checkpoints && checkpoints.length > 0) {
-        // Check if any of these checkpoints belong to our current client
-        const matchingCheckpoint = checkpoints.find(cp => 
-          cp.clients?.name === checkpoint?.clients?.name
-        );
-        
-        if (matchingCheckpoint) {
-          console.log("✅ Manual code matches current client:", matchingCheckpoint);
-          return true;
-        }
-        
-        // For flexibility, accept any valid manual code in the system
-        console.log("✅ Manual code exists in system (different client but accepting)");
+        console.log("✅ SUCCESS! Code found:", checkpoints[0]);
         return true;
       }
 
-      console.log("❌ Manual code not found in database");
+      console.log("❌ Code not found in database");
+      
+      // Debug: show sample codes
+      const { data: samples } = await supabase
+        .from("checkpoints")
+        .select("manual_code")
+        .eq("active", true)
+        .limit(3);
+      console.log("📝 Sample codes in DB:", samples);
+      
       return false;
     } catch (error) {
-      console.error("Error validating manual code:", error);
+      console.error("💥 Exception in validateManualCode:", error);
       return false;
     }
   };
