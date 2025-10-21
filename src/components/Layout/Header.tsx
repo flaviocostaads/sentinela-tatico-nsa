@@ -1,23 +1,17 @@
 import { Shield, User, Bell, Search, Settings, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
-
 const Header = () => {
-  const { profile, signOut } = useAuth();
+  const {
+    profile,
+    signOut
+  } = useAuth();
   const navigate = useNavigate();
-
-  return (
-    <header className="border-b border-border bg-card/50 backdrop-blur-sm supports-[backdrop-filter]:bg-card/20">
+  return <header className="border-b border-border bg-card/50 backdrop-blur-sm supports-[backdrop-filter]:bg-card/20">
       <div className="flex h-16 items-center justify-between px-6">
         {/* Logo */}
         <div className="flex items-center space-x-3">
@@ -26,7 +20,7 @@ const Header = () => {
           </div>
           <div>
             <h1 className="text-xl font-bold text-foreground">Sentinela Tático</h1>
-            <p className="text-xs text-muted-foreground">NSA Security Systems</p>
+            <p className="text-xs text-muted-foreground">NSA Norte Security</p>
           </div>
         </div>
 
@@ -34,10 +28,7 @@ const Header = () => {
         <div className="flex-1 max-w-md mx-8">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Buscar rondas, táticos, clientes..." 
-              className="pl-10 bg-input/50 border-border focus:border-primary transition-tactical"
-            />
+            <Input placeholder="Buscar rondas, táticos, clientes..." className="pl-10 bg-input/50 border-border focus:border-primary transition-tactical" />
           </div>
         </div>
 
@@ -67,9 +58,7 @@ const Header = () => {
                 <div className="text-left">
                   <p className="text-sm font-medium">{profile?.name || 'Usuário'}</p>
                   <p className="text-xs text-muted-foreground">
-                    {profile?.role === 'admin' ? 'Administrador' : 
-                     profile?.role === 'operador' ? 'Operador' : 
-                     profile?.role === 'tatico' ? 'Tático' : 'Sistema'}
+                    {profile?.role === 'admin' ? 'Administrador' : profile?.role === 'operador' ? 'Operador' : profile?.role === 'tatico' ? 'Tático' : 'Sistema'}
                   </p>
                 </div>
               </Button>
@@ -92,8 +81,6 @@ const Header = () => {
           </DropdownMenu>
         </div>
       </div>
-    </header>
-  );
+    </header>;
 };
-
 export default Header;
