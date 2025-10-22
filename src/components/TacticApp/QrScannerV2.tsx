@@ -290,9 +290,10 @@ const QrScannerV2 = ({
 
     console.log("🔍 Starting QR code scanning");
     
+    // Scan more frequently for better responsiveness (100ms instead of 150ms)
     scanIntervalRef.current = window.setInterval(() => {
       scanFrame();
-    }, 150);
+    }, 100);
   };
 
   const scanFrame = useCallback(() => {
@@ -318,9 +319,9 @@ const QrScannerV2 = ({
     // Get image data
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-    // Scan for QR code
+    // Scan for QR code with better detection
     const code = jsQR(imageData.data, imageData.width, imageData.height, {
-      inversionAttempts: "dontInvert",
+      inversionAttempts: "attemptBoth", // Try both normal and inverted for better detection
     });
 
     if (code?.data) {
@@ -535,17 +536,28 @@ const QrScannerV2 = ({
               </div>
 
               {/* Manual input button */}
-              <div className="absolute bottom-3 right-3">
+              <div className="absolute bottom-3 right-3 pointer-events-auto">
                 <Button
                   onClick={() => {
+                    console.log("🔘 Manual button clicked");
+                    // Stop scanning and clean up camera
                     if (scanIntervalRef.current) {
                       clearInterval(scanIntervalRef.current);
+                      scanIntervalRef.current = null;
+                    }
+                    // Stop camera stream
+                    if (streamRef.current) {
+                      streamRef.current.getTracks().forEach(track => {
+                        track.stop();
+                        console.log("📹 Stopped track for manual input:", track.label);
+                      });
+                      streamRef.current = null;
                     }
                     setState('manual');
                   }}
                   size="sm"
                   variant="secondary"
-                  className="bg-black/60 backdrop-blur-sm hover:bg-black/70"
+                  className="bg-black/60 backdrop-blur-sm hover:bg-black/70 shadow-lg"
                 >
                   <Type className="w-4 h-4 mr-2" />
                   Manual
