@@ -484,88 +484,83 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
         return false;
       }
 
-      // DEBUG: First check if ANY checkpoint exists with this QR code (regardless of client)
-      console.log("🔍 DEBUG: Checking if QR code exists in database...");
-      const { data: anyCheckpoint, error: anyError } = await supabase
-        .from("checkpoints")
-        .select("id, name, qr_code, manual_code, client_id, clients(name)")
-        .eq("active", true)
-        .or(`qr_code.eq.${cleanQrCode},manual_code.eq.${cleanQrCode}`)
-        .maybeSingle();
-      
-      if (anyError) {
-        console.error("❌ DEBUG query error:", anyError);
-      } else if (anyCheckpoint) {
-        console.log("🔍 DEBUG: Found checkpoint with this QR code:", {
-          id: anyCheckpoint.id,
-          name: anyCheckpoint.name,
-          qr_code: anyCheckpoint.qr_code,
-          manual_code: anyCheckpoint.manual_code,
-          client_id: anyCheckpoint.client_id,
-          client_name: anyCheckpoint.clients?.name
-        });
-        console.log("🔍 DEBUG: Does it match current client?", anyCheckpoint.client_id === currentClientId);
-      } else {
-        console.log("❌ DEBUG: No checkpoint found with this QR code in entire database");
-        console.log("🔍 DEBUG: Tried to match:", cleanQrCode);
-      }
-
-      // Now do the actual validation: find checkpoint with this QR code for the current client
-      console.log("🔍 Searching for checkpoint with QR code for current client...");
-      
-      // Try multiple query strategies for robustness
-      let foundCheckpoint = null;
-      
-      // Strategy 1: Search by qr_code
-      console.log("🔍 Strategy 1: Searching by qr_code...");
-      const { data: qrMatch, error: qrError } = await supabase
+      // DEBUG: First check all checkpoints for this client
+      console.log("🔍 DEBUG: Checking checkpoints for current client...");
+      const { data: clientCheckpoints, error: clientError } = await supabase
         .from("checkpoints")
         .select("id, name, qr_code, manual_code, client_id, clients(name)")
         .eq("client_id", currentClientId)
-        .eq("active", true)
-        .eq("qr_code", cleanQrCode)
-        .maybeSingle();
+        .eq("active", true);
       
-      if (qrError && qrError.code !== 'PGRST116') {
-        console.error("❌ QR code search error:", qrError);
+      console.log("📋 All checkpoints for this client:", clientCheckpoints);
+      
+      if (clientError) {
+        console.error("❌ Error fetching client checkpoints:", clientError);
+        return false;
       }
-      
-      if (qrMatch) {
-        console.log("✅ Found match by qr_code");
-        foundCheckpoint = qrMatch;
+
+      if (!clientCheckpoints || clientCheckpoints.length === 0) {
+        console.log("❌ No checkpoints found for this client");
+        return false;
       }
+
+      // Now search through client checkpoints for a match
+      console.log("🔍 Searching for match in", clientCheckpoints.length, "checkpoints...");
       
-      // Strategy 2: If not found, search by manual_code
-      if (!foundCheckpoint) {
-        console.log("🔍 Strategy 2: Searching by manual_code...");
-        const { data: manualMatch, error: manualError } = await supabase
-          .from("checkpoints")
-          .select("id, name, qr_code, manual_code, client_id, clients(name)")
-          .eq("client_id", currentClientId)
-          .eq("active", true)
-          .eq("manual_code", cleanQrCode)
-          .maybeSingle();
+      let foundCheckpoint = null;
+      
+      for (const cp of clientCheckpoints) {
+        console.log("🔍 Checking checkpoint:", {
+          name: cp.name,
+          qr_code: cp.qr_code,
+          manual_code: cp.manual_code
+        });
         
-        if (manualError && manualError.code !== 'PGRST116') {
-          console.error("❌ Manual code search error:", manualError);
+        // Strategy 1: Check if manual_code matches
+        if (cp.manual_code === cleanQrCode) {
+          console.log("✅ MATCH: Manual code matches!");
+          foundCheckpoint = cp;
+          break;
         }
         
-        if (manualMatch) {
-          console.log("✅ Found match by manual_code");
-          foundCheckpoint = manualMatch;
+        // Strategy 2: Check if qr_code matches (exact string match)
+        if (cp.qr_code === cleanQrCode) {
+          console.log("✅ MATCH: QR code exact string match!");
+          foundCheckpoint = cp;
+          break;
+        }
+        
+        // Strategy 3: If qr_code is JSON, try to parse and compare
+        if (typeof cp.qr_code === 'string') {
+          try {
+            const qrJson = JSON.parse(cp.qr_code);
+            // Check if the scanned data matches the manualCode in the JSON
+            if (qrJson.manualCode === cleanQrCode) {
+              console.log("✅ MATCH: Scanned code matches manualCode in QR JSON!");
+              foundCheckpoint = cp;
+              break;
+            }
+            // Check if the scanned data is the JSON itself
+            const scannedJson = JSON.parse(cleanQrCode);
+            if (scannedJson.manualCode === qrJson.manualCode) {
+              console.log("✅ MATCH: Scanned JSON manualCode matches!");
+              foundCheckpoint = cp;
+              break;
+            }
+          } catch (e) {
+            // Not JSON, skip
+          }
         }
       }
 
       if (!foundCheckpoint) {
-        console.log("❌ No checkpoint found with this QR/manual code for the current client");
-        console.log("🔍 Searched in client_id:", currentClientId);
-        console.log("🔍 Expected client:", checkpoint?.clients?.name);
-        
-        // If we found a checkpoint in the debug query but not here, it means wrong client
-        if (anyCheckpoint) {
-          console.log("⚠️ QR code belongs to different client:", anyCheckpoint.clients?.name);
-        }
-        
+        console.log("❌ No matching checkpoint found for this client");
+        console.log("🔍 Tried to match:", cleanQrCode);
+        console.log("🔍 Available checkpoints:", clientCheckpoints.map(cp => ({
+          name: cp.name,
+          manual_code: cp.manual_code,
+          qr_code: typeof cp.qr_code === 'string' && cp.qr_code.length < 50 ? cp.qr_code : 'JSON data'
+        })));
         return false;
       }
 
