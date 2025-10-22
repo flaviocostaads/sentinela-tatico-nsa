@@ -50,9 +50,9 @@ interface Round {
   clients: {
     name: string;
   };
-  profiles: {
+  profiles?: {
     name: string;
-  };
+  } | null;
 }
 
 const Incidents = () => {
@@ -402,7 +402,7 @@ const Incidents = () => {
                         <SelectContent>
                           {rounds.map((round) => (
                             <SelectItem key={round.id} value={round.id}>
-                              {round.clients.name} - {round.profiles.name}
+                              {round.clients.name} - {round.profiles?.name || 'Não atribuído'}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -632,7 +632,7 @@ const Incidents = () => {
                         <div>
                           <CardTitle className="text-lg">{incident.title}</CardTitle>
                           <p className="text-sm text-muted-foreground">
-                            {incident.rounds?.clients.name} - {incident.rounds?.profiles.name}
+                            {incident.rounds?.clients.name} - {incident.rounds?.profiles?.name || 'Não atribuído'}
                           </p>
                         </div>
                       </div>

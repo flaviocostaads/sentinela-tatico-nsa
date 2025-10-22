@@ -24,9 +24,9 @@ interface Round {
     name: string;
     address: string;
   };
-  profiles: {
+  profiles?: {
     name: string;
-  };
+  } | null;
   vehicles?: {
     license_plate: string;
     brand: string;
@@ -308,7 +308,7 @@ const DetailedRoundReport = ({ roundId, onBack }: DetailedRoundReportProps) => {
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Tático</p>
-                      <p className="font-medium">{round.profiles.name}</p>
+                      <p className="font-medium">{round.profiles?.name || 'Não atribuído'}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Veículo</p>

@@ -29,9 +29,9 @@ interface Round {
     name: string;
     address: string;
   };
-  profiles: {
+  profiles?: {
     name: string;
-  };
+  } | null;
   round_templates?: {
     name: string;
     shift_type: string;
@@ -365,7 +365,7 @@ const EnhancedRoundDetails = ({ round, onClose }: EnhancedRoundDetailsProps) => 
             <text x="10" y="40" class="text">Distância: ${calculateDistance()} km</text>
             <text x="10" y="55" class="text">Pontos: ${routePoints.length}</text>
             <text x="10" y="70" class="text">Duração: ${formatDuration(round.start_time, round.end_time)}</text>
-            <text x="10" y="85" class="text">Tático: ${round.profiles.name}</text>
+            <text x="10" y="85" class="text">Tático: ${round.profiles?.name || 'Não atribuído'}</text>
             <text x="10" y="100" class="text">Data: ${round.start_time ? new Date(round.start_time).toLocaleDateString('pt-BR') : '-'}</text>
           </g>
         </svg>
@@ -400,7 +400,7 @@ const EnhancedRoundDetails = ({ round, onClose }: EnhancedRoundDetailsProps) => 
         id: round.id,
         template: round.round_templates?.name || 'N/A',
         turno: round.round_templates?.shift_type || 'N/A',
-        tatico: round.profiles.name,
+        tatico: round.profiles?.name || 'Não atribuído',
         cliente: round.clients.name,
         veiculo: round.vehicle === 'car' ? 'Carro' : 'Moto',
         status: getStatusLabel(round.status),
@@ -516,7 +516,7 @@ const EnhancedRoundDetails = ({ round, onClose }: EnhancedRoundDetailsProps) => 
           <div className="flex items-center space-x-4 text-muted-foreground">
             <div className="flex items-center space-x-1">
               <User className="h-4 w-4" />
-              <span>Tático: {round.profiles.name}</span>
+              <span>Tático: {round.profiles?.name || 'Não atribuído'}</span>
             </div>
             <div className="flex items-center space-x-1">
               {round.vehicle === 'car' ? <Car className="h-4 w-4" /> : <Bike className="h-4 w-4" />}

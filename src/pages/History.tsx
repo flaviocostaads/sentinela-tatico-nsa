@@ -31,9 +31,9 @@ interface Round {
     name: string;
     address: string;
   };
-  profiles: {
+  profiles?: {
     name: string;
-  };
+  } | null;
   round_templates?: {
     name: string;
     shift_type: string;
@@ -173,7 +173,7 @@ const History = () => {
 
     if (filters.tactic) {
       filtered = filtered.filter(round => 
-        round.profiles.name.toLowerCase().includes(filters.tactic.toLowerCase())
+        round.profiles?.name?.toLowerCase().includes(filters.tactic.toLowerCase())
       );
     }
 
@@ -214,7 +214,7 @@ const History = () => {
     const csvData = filteredRounds.map(round => ({
       'Data/Hora': new Date(round.created_at).toLocaleString('pt-BR'),
       'Cliente': round.clients.name,
-      'Tático': round.profiles.name,
+      'Tático': round.profiles?.name || 'Não atribuído',
       'Status': getStatusLabel(round.status),
       'Veículo': round.vehicle === 'car' ? 'Carro' : 'Moto',
       'Duração': formatDuration(round.start_time, round.end_time),
@@ -440,7 +440,7 @@ const History = () => {
                   <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-center">
                     <div className="space-y-1">
                       <p className="font-medium">{round.clients.name}</p>
-                      <p className="text-sm text-muted-foreground">{round.profiles.name}</p>
+                      <p className="text-sm text-muted-foreground">{round.profiles?.name || 'Não atribuído'}</p>
                     </div>
                     <div>
                       <Badge className={getStatusColor(round.status)}>
@@ -483,7 +483,7 @@ const History = () => {
                                 <br /><br />
                                 <strong>Cliente:</strong> {round.clients.name}
                                 <br />
-                                <strong>Tático:</strong> {round.profiles.name}
+                                <strong>Tático:</strong> {round.profiles?.name || 'Não atribuído'}
                                 <br />
                                 <strong>Data:</strong> {new Date(round.created_at).toLocaleDateString('pt-BR')}
                               </AlertDialogDescription>
@@ -549,7 +549,7 @@ const History = () => {
                           <br /><br />
                           <strong>Cliente:</strong> {selectedRound.clients.name}
                           <br />
-                          <strong>Tático:</strong> {selectedRound.profiles.name}
+                          <strong>Tático:</strong> {selectedRound.profiles?.name || 'Não atribuído'}
                           <br />
                           <strong>Data:</strong> {new Date(selectedRound.created_at).toLocaleDateString('pt-BR')}
                         </AlertDialogDescription>

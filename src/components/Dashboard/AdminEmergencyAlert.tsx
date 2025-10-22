@@ -22,9 +22,9 @@ interface AdminEmergencyIncident {
     clients: {
       name: string;
     };
-    profiles: {
+    profiles?: {
       name: string;
-    };
+    } | null;
   };
 }
 

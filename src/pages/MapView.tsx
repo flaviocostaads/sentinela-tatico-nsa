@@ -25,9 +25,9 @@ interface Round {
     lat?: number;
     lng?: number;
   };
-  profiles: {
+  profiles?: {
     name: string;
-  };
+  } | null;
 }
 
 interface Client {
@@ -172,7 +172,7 @@ const MapViewPage = () => {
                     rounds.map((round) => (
                       <div key={round.id} className="p-3 border rounded-lg bg-background/50">
                         <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-sm">{round.profiles.name}</span>
+                          <span className="font-medium text-sm">{round.profiles?.name || 'Não atribuído'}</span>
                           <Badge className={getStatusColor(round.status)}>
                             {getStatusLabel(round.status)}
                           </Badge>

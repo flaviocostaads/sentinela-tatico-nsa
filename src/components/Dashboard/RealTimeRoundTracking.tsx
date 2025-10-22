@@ -33,9 +33,9 @@ interface Round {
   clients: {
     name: string;
   };
-  profiles: {
+  profiles?: {
     name: string;
-  };
+  } | null;
 }
 
 interface RealTimeRoundTrackingProps {
@@ -200,7 +200,7 @@ const RealTimeRoundTracking: React.FC<RealTimeRoundTrackingProps> = ({
                 onClick={() => handleRoundSelect(round)}
               >
                 <div className="flex items-center justify-between w-full">
-                  <span className="text-sm">{round.profiles.name} - {round.clients.name}</span>
+                  <span className="text-sm">{round.profiles?.name || 'Não atribuído'} - {round.clients.name}</span>
                   <Badge
                     variant={round.status === 'active' ? 'default' : 'destructive'}
                     className="ml-2"
