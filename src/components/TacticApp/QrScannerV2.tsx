@@ -301,34 +301,49 @@ const QrScannerV2 = ({
       clearInterval(scanIntervalRef.current);
     }
 
-    console.log("🔍 Starting QR code scanning");
-    console.log("📹 Video element:", videoRef.current ? "Ready" : "Not ready");
-    console.log("🎨 Canvas element:", canvasRef.current ? "Ready" : "Not ready");
+    console.log("🔍 === STARTING QR CODE SCANNING ===");
+    console.log("📹 Video element:", videoRef.current);
+    console.log("📹 Video ready:", videoRef.current?.readyState);
+    console.log("📹 Video dimensions:", {
+      width: videoRef.current?.videoWidth,
+      height: videoRef.current?.videoHeight
+    });
+    console.log("🎨 Canvas element:", canvasRef.current);
     
-    // Scan very frequently for better responsiveness (50ms for first 3 seconds, then 100ms)
+    // Verify video is actually playing
+    const video = videoRef.current;
+    if (video) {
+      console.log("🎬 Video state:", {
+        paused: video.paused,
+        ended: video.ended,
+        currentTime: video.currentTime,
+        duration: video.duration
+      });
+    }
+    
+    // Start scanning immediately and frequently
     let scanCount = 0;
-    let fastScanPhase = true;
     
     const scan = () => {
       scanCount++;
       
-      // After 60 fast scans (3 seconds), slow down to normal speed
-      if (fastScanPhase && scanCount > 60) {
-        fastScanPhase = false;
-        clearInterval(scanIntervalRef.current!);
-        console.log("⚡ Switching to normal scan speed");
-        scanIntervalRef.current = window.setInterval(scan, 100);
+      if (scanCount % 10 === 0) {
+        console.log(`🔄 Scan attempt #${scanCount}`);
       }
       
-      if (scanCount % 20 === 0) {
-        console.log(`🔄 Scanning... (${scanCount} attempts)`);
+      try {
+        scanFrame();
+      } catch (error) {
+        console.error("❌ Scan error:", error);
       }
-      scanFrame();
     };
     
-    // Start with fast scanning
-    scanIntervalRef.current = window.setInterval(scan, 50);
-    console.log("⚡ Fast scanning mode active (50ms interval)");
+    // Scan every 150ms for good balance between performance and detection
+    scanIntervalRef.current = window.setInterval(scan, 150);
+    console.log("⚡ Scanning started with 150ms interval");
+    
+    // Also do an immediate first scan
+    scan();
   };
 
   const scanFrame = useCallback(() => {
@@ -336,10 +351,19 @@ const QrScannerV2 = ({
     const canvas = canvasRef.current;
     
     if (!video || !canvas) {
+      console.log("❌ Missing video or canvas element");
       return;
     }
 
+    // Check video state
     if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+      console.log("⏳ Video not ready yet, readyState:", video.readyState);
+      return;
+    }
+
+    // Ensure video has dimensions
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      console.log("⚠️ Video has no dimensions yet");
       return;
     }
 
@@ -349,18 +373,31 @@ const QrScannerV2 = ({
       return;
     }
 
-    // Match canvas size to video
-    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      console.log("📐 Canvas resized:", { width: canvas.width, height: canvas.height });
+    // Set canvas size to match video - use larger dimensions for better QR detection
+    const targetWidth = Math.max(video.videoWidth, 640);
+    const targetHeight = Math.max(video.videoHeight, 480);
+    
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      console.log("📐 Canvas resized:", { 
+        width: canvas.width, 
+        height: canvas.height,
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight
+      });
     }
 
     try {
-      // Draw video frame to canvas
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw video frame to canvas with smooth scaling
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Get image data
+      // Get image data from entire canvas
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       
       if (!imageData || imageData.data.length === 0) {
@@ -368,18 +405,50 @@ const QrScannerV2 = ({
         return;
       }
 
-      // Scan for QR code with better detection
-      const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: "attemptBoth", // Try both normal and inverted for better detection
+      console.log("🔍 Scanning frame:", {
+        width: imageData.width,
+        height: imageData.height,
+        dataLength: imageData.data.length
+      });
+
+      // Try multiple detection strategies
+      let code = null;
+      
+      // Strategy 1: Full image with both inversions
+      code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: "attemptBoth",
       });
 
       if (code?.data) {
-        console.log("🎯 QR Code detected:", code.data);
-        console.log("📍 QR Code location:", code.location);
+        console.log("✅ QR Code detected with full image scan!");
+        console.log("🎯 QR Data:", code.data);
+        console.log("📍 QR Location:", code.location);
         handleQrDetected(code.data);
+        return;
       }
+
+      // Strategy 2: Try center region only (in case QR is in center)
+      const centerX = Math.floor(imageData.width * 0.25);
+      const centerY = Math.floor(imageData.height * 0.25);
+      const centerWidth = Math.floor(imageData.width * 0.5);
+      const centerHeight = Math.floor(imageData.height * 0.5);
+      
+      const centerImageData = ctx.getImageData(centerX, centerY, centerWidth, centerHeight);
+      
+      code = jsQR(centerImageData.data, centerImageData.width, centerImageData.height, {
+        inversionAttempts: "attemptBoth",
+      });
+
+      if (code?.data) {
+        console.log("✅ QR Code detected in center region!");
+        console.log("🎯 QR Data:", code.data);
+        handleQrDetected(code.data);
+        return;
+      }
+
     } catch (error) {
       console.error("❌ Error in scanFrame:", error);
+      console.error("Error stack:", error instanceof Error ? error.stack : 'No stack');
     }
   }, []);
 
@@ -503,7 +572,11 @@ const QrScannerV2 = ({
               <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
               <p className="text-sm text-muted-foreground">Inicializando câmera...</p>
               <Button 
-                onClick={() => setState('manual')} 
+                onClick={() => {
+                  console.log("🔘 Switching to manual mode from initializing");
+                  cleanup();
+                  setState('manual');
+                }} 
                 variant="ghost" 
                 size="sm"
                 className="mt-4"
@@ -525,7 +598,11 @@ const QrScannerV2 = ({
                   <Camera className="w-4 h-4 mr-2" />
                   Tentar novamente
                 </Button>
-                <Button onClick={() => setState('manual')} variant="default" className="w-full">
+                <Button onClick={() => {
+                  console.log("🔘 Switching to manual mode from error");
+                  cleanup();
+                  setState('manual');
+                }} variant="default" className="w-full">
                   <Type className="w-4 h-4 mr-2" />
                   Usar código manual
                 </Button>
@@ -614,22 +691,10 @@ const QrScannerV2 = ({
 
               {/* Manual input button */}
               <div className="absolute bottom-3 right-3 pointer-events-auto">
-                <Button
+              <Button
                   onClick={() => {
-                    console.log("🔘 Manual button clicked");
-                    // Stop scanning and clean up camera
-                    if (scanIntervalRef.current) {
-                      clearInterval(scanIntervalRef.current);
-                      scanIntervalRef.current = null;
-                    }
-                    // Stop camera stream
-                    if (streamRef.current) {
-                      streamRef.current.getTracks().forEach(track => {
-                        track.stop();
-                        console.log("📹 Stopped track for manual input:", track.label);
-                      });
-                      streamRef.current = null;
-                    }
+                    console.log("🔘 Manual button clicked - switching to manual mode");
+                    cleanup();
                     setState('manual');
                   }}
                   size="sm"

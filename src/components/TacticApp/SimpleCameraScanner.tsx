@@ -80,17 +80,25 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
     try {
-      // Scan for QR code
-      const qrCode = jsQR(imageData.data, imageData.width, imageData.height);
+      // Scan for QR code with inversion attempts for better detection
+      const qrCode = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: "attemptBoth",
+      });
       
       if (qrCode && qrCode.data) {
-        console.log("QR Code detected:", qrCode.data);
+        console.log("✅ QR Code detectado:", qrCode.data);
         stopScanning();
+        
+        toast({
+          title: "QR Code Detectado!",
+          description: "Processando checkpoint...",
+        });
+        
         onScan(qrCode.data);
         onClose();
       }
     } catch (error) {
-      console.error("Error scanning QR code:", error);
+      console.error("❌ Erro ao escanear QR code:", error);
     }
   }, [isScanning, onScan, onClose]);
 
@@ -429,7 +437,11 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
               <Loader2 className="w-16 h-16 text-primary mx-auto mb-4 animate-spin" />
               <p className="text-sm text-muted-foreground mb-4">Inicializando câmera...</p>
               <Button 
-                onClick={() => setCameraState('manual')} 
+                onClick={() => {
+                  console.log("🔄 Switching to manual mode...");
+                  stopCamera();
+                  setCameraState('manual');
+                }} 
                 variant="outline" 
                 className="w-full"
               >
@@ -443,8 +455,12 @@ const SimpleCameraScanner = ({ open, onClose, onScan, expectedCompany = "Cliente
             <div className="p-8 text-center">
               <Camera className="w-16 h-16 text-destructive mx-auto mb-4" />
               <p className="text-sm text-muted-foreground mb-4">{error}</p>
-              <div className="space-y-2">
-                <Button onClick={() => setCameraState('manual')} className="w-full">
+               <div className="space-y-2">
+                <Button onClick={() => {
+                  console.log("🔄 Switching to manual mode from error...");
+                  stopCamera();
+                  setCameraState('manual');
+                }} className="w-full">
                   Usar código manual
                 </Button>
               </div>
