@@ -647,6 +647,21 @@ const QrScannerV2 = ({
           {/* CAMERA READY STATE */}
           {state === 'camera-ready' && (
             <>
+              {/* Video */}
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="w-full h-full object-cover min-h-[400px]"
+              />
+              
+              {/* Hidden canvas for processing */}
+              <canvas
+                ref={canvasRef}
+                className="hidden"
+              />
+
               {/* Scanning overlay */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="relative">
@@ -673,20 +688,19 @@ const QrScannerV2 = ({
                 </p>
               </div>
 
-              {/* Manual input button */}
-              <div className="absolute bottom-3 right-3 pointer-events-auto">
-              <Button
+              {/* Manual input button - PROMINENT AND FUNCTIONAL */}
+              <div className="absolute bottom-3 right-3 pointer-events-auto z-50">
+                <Button
                   onClick={() => {
                     console.log("🔘 Manual button clicked - switching to manual mode");
                     cleanup();
                     setState('manual');
                   }}
-                  size="sm"
-                  variant="secondary"
-                  className="bg-black/60 backdrop-blur-sm hover:bg-black/70 shadow-lg"
+                  size="lg"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-xl font-semibold"
                 >
-                  <Type className="w-4 h-4 mr-2" />
-                  Manual
+                  <Type className="w-5 h-5 mr-2" />
+                  Código Manual
                 </Button>
               </div>
             </>
