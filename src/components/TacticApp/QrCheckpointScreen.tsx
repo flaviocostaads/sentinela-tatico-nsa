@@ -440,13 +440,11 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
       console.log("🔐 === Validating QR Code Against Checkpoint ===");
       console.log("📱 QR Code:", qrCode);
       console.log("🎯 Expected Checkpoint ID:", expectedCheckpointId);
-      
-      // Clean the checkpoint ID (remove 'template_' prefix if present)
-      const cleanExpectedId = expectedCheckpointId.startsWith('template_') 
-        ? expectedCheckpointId.replace('template_', '') 
-        : expectedCheckpointId;
-      
-      console.log("🧹 Clean expected ID:", cleanExpectedId);
+      console.log("🏢 Current loaded checkpoint data:", {
+        id: checkpoint?.id,
+        clientId: checkpoint?.clients?.id,
+        clientName: checkpoint?.clients?.name
+      });
 
       // Search for checkpoint by QR code
       const { data: checkpointByQr, error: qrError } = await supabase
@@ -475,45 +473,34 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
       const foundCheckpoint = checkpointByQr || checkpointByManual;
 
       if (!foundCheckpoint) {
-        console.log("❌ No checkpoint found with this QR/manual code");
+        console.log("❌ No checkpoint found with this QR/manual code in database");
         return false;
       }
 
-      console.log("✅ Found checkpoint:", foundCheckpoint);
-
-      // Get current checkpoint details to compare client_id
-      const { data: currentCheckpoint, error: currentError } = await supabase
-        .from("checkpoints")
-        .select("id, client_id, name")
-        .eq("id", cleanExpectedId)
-        .eq("active", true)
-        .maybeSingle();
-
-      if (currentError && currentError.code !== 'PGRST116') {
-        console.error("❌ Error fetching current checkpoint:", currentError);
-      }
-
-      console.log("📍 Current checkpoint:", currentCheckpoint);
+      console.log("✅ Found checkpoint by QR/manual code:", {
+        id: foundCheckpoint.id,
+        name: foundCheckpoint.name,
+        clientId: foundCheckpoint.client_id
+      });
 
       // Validation logic:
-      // 1. If we found the exact checkpoint ID, accept it
-      if (foundCheckpoint.id === cleanExpectedId) {
-        console.log("✅ VALID: Exact checkpoint ID match");
+      // If the scanned checkpoint belongs to the same client as the current checkpoint, it's valid
+      if (checkpoint?.clients?.id && foundCheckpoint.client_id === checkpoint.clients.id) {
+        console.log("✅ VALID: QR code belongs to same client");
+        console.log("🔍 Match details:", {
+          scannedClientId: foundCheckpoint.client_id,
+          expectedClientId: checkpoint.clients.id,
+          clientName: checkpoint.clients.name
+        });
         return true;
       }
 
-      // 2. If both checkpoints belong to the same client, accept it
-      if (currentCheckpoint && foundCheckpoint.client_id === currentCheckpoint.client_id) {
-        console.log("✅ VALID: Same client - allowing checkpoint from same location");
-        return true;
-      }
-
-      console.log("❌ INVALID: Checkpoint does not match");
-      console.log("🔍 Comparison:", {
-        foundId: foundCheckpoint.id,
-        expectedId: cleanExpectedId,
-        foundClientId: foundCheckpoint.client_id,
-        expectedClientId: currentCheckpoint?.client_id
+      console.log("❌ INVALID: QR code belongs to different client");
+      console.log("🔍 Mismatch details:", {
+        scannedClientId: foundCheckpoint.client_id,
+        scannedClientName: foundCheckpoint.clients?.name,
+        expectedClientId: checkpoint?.clients?.id,
+        expectedClientName: checkpoint?.clients?.name
       });
       
       return false;
