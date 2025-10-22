@@ -18,7 +18,35 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { phone, message, template_name } = await req.json()
+    const requestData = await req.json()
+    const { phone, message, template_name } = requestData
+
+    // Input validation
+    if (!phone || typeof phone !== 'string') {
+      throw new Error('Phone number is required')
+    }
+    
+    // Validate phone number format (international format)
+    const phoneRegex = /^\+?[1-9]\d{1,14}$/
+    if (!phoneRegex.test(phone.replace(/[\s-]/g, ''))) {
+      throw new Error('Invalid phone number format (use international format)')
+    }
+    
+    if (phone.length > 20) {
+      throw new Error('Phone number too long (max 20 characters)')
+    }
+
+    if (!message || typeof message !== 'string') {
+      throw new Error('Message is required')
+    }
+    
+    if (message.length < 1) {
+      throw new Error('Message cannot be empty')
+    }
+    
+    if (message.length > 4096) {
+      throw new Error('Message too long (max 4096 characters)')
+    }
 
     // Get WhatsApp configuration
     const { data: config, error: configError } = await supabase

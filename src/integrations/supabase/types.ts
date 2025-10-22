@@ -893,6 +893,30 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       vehicle_fuel_logs: {
         Row: {
           created_at: string
@@ -1125,6 +1149,18 @@ export type Database = {
         }
         Returns: string
       }
+      has_admin_or_operator_role: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
+      has_admin_role: { Args: { _user_id: string }; Returns: boolean }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       is_user_assigned_to_round: {
         Args: { p_round_id: string; p_user_id: string }
         Returns: boolean
@@ -1143,6 +1179,7 @@ export type Database = {
       }
     }
     Enums: {
+      app_role: "admin" | "operador" | "tatico"
       checkpoint_status: "completed" | "skipped" | "delayed"
       incident_priority: "low" | "medium" | "high" | "critical"
       incident_type: "security" | "maintenance" | "emergency" | "other"
@@ -1276,6 +1313,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "operador", "tatico"],
       checkpoint_status: ["completed", "skipped", "delayed"],
       incident_priority: ["low", "medium", "high", "critical"],
       incident_type: ["security", "maintenance", "emergency", "other"],

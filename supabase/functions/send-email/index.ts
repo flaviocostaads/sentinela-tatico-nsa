@@ -18,7 +18,48 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { to, subject, html, template_name, provider = 'sendgrid' } = await req.json()
+    const requestData = await req.json()
+    const { to, subject, html, template_name, provider = 'sendgrid' } = requestData
+
+    // Input validation
+    if (!to || typeof to !== 'string') {
+      throw new Error('Valid email address is required')
+    }
+    
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(to)) {
+      throw new Error('Invalid email address format')
+    }
+    
+    if (to.length > 255) {
+      throw new Error('Email address too long (max 255 characters)')
+    }
+
+    if (!subject || typeof subject !== 'string') {
+      throw new Error('Subject is required')
+    }
+    
+    if (subject.length > 500) {
+      throw new Error('Subject too long (max 500 characters)')
+    }
+    
+    // Check for email header injection attempts
+    if (subject.includes('\n') || subject.includes('\r')) {
+      throw new Error('Invalid characters in subject')
+    }
+
+    if (!html || typeof html !== 'string') {
+      throw new Error('Email content is required')
+    }
+    
+    if (html.length > 100000) {
+      throw new Error('Email content too long (max 100KB)')
+    }
+
+    if (provider && !['sendgrid', 'mailchimp'].includes(provider)) {
+      throw new Error('Invalid email provider')
+    }
 
     // Get email configuration
     const { data: config, error: configError } = await supabase
