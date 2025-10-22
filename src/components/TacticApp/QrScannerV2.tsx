@@ -27,7 +27,7 @@ const QrScannerV2 = ({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<number | null>(null);
-  const mountedRef = useRef(false);
+  const initializingRef = useRef(false);
   
   const [state, setState] = useState<ScannerState>('initializing');
   const [error, setError] = useState<string>("");
@@ -35,50 +35,15 @@ const QrScannerV2 = ({
   const [validating, setValidating] = useState(false);
   const { toast } = useToast();
 
-  // Cleanup on unmount
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      cleanup();
-    };
-  }, []);
-
-  // Handle dialog open/close
-  useEffect(() => {
-    if (open) {
-      console.log("🎬 QR Scanner V2 - Dialog opened");
-      resetAndStart();
-    } else {
-      console.log("🛑 QR Scanner V2 - Dialog closed");
-      cleanup();
-    }
-  }, [open]);
-
-  const resetAndStart = () => {
-    setState('initializing');
-    setError("");
-    setManualCode("");
-    setValidating(false);
+  // Cleanup function
+  const cleanup = useCallback(() => {
+    console.log("🧹 Cleaning up camera resources");
     
-    // Small delay to ensure DOM is ready
-    setTimeout(() => {
-      if (mountedRef.current) {
-        initializeCamera();
-      }
-    }, 200);
-  };
-
-  const cleanup = () => {
-    console.log("🧹 Cleaning up resources");
-    
-    // Stop scanning
     if (scanIntervalRef.current) {
       clearInterval(scanIntervalRef.current);
       scanIntervalRef.current = null;
     }
     
-    // Stop camera stream
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => {
         track.stop();
@@ -87,14 +52,29 @@ const QrScannerV2 = ({
       streamRef.current = null;
     }
     
-    // Clear video
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
-  };
+    
+    initializingRef.current = false;
+  }, []);
 
-  const initializeCamera = async () => {
-    console.log("📱 Initializing camera...");
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      cleanup();
+    };
+  }, [cleanup]);
+
+  // Initialize camera when dialog opens
+  const initializeCamera = useCallback(async () => {
+    if (initializingRef.current) {
+      console.log("⚠️ Already initializing, skipping...");
+      return;
+    }
+
+    initializingRef.current = true;
+    console.log("📱 Starting camera initialization...");
     
     try {
       // Check browser support
@@ -102,26 +82,19 @@ const QrScannerV2 = ({
         throw new Error("BROWSER_NOT_SUPPORTED");
       }
 
-      // Wait for DOM to be ready and check video element with retry
-      let retries = 3;
-      while (!videoRef.current && retries > 0) {
-        console.log(`⏳ Waiting for video element... (${retries} retries left)`);
-        await new Promise(resolve => setTimeout(resolve, 100));
-        retries--;
-      }
-
+      // Check if video element exists
       if (!videoRef.current) {
-        console.error("❌ Video element not found after retries");
+        console.error("❌ Video element not available");
         throw new Error("VIDEO_ELEMENT_NOT_FOUND");
       }
 
-      console.log("✅ Video element found, requesting camera access...");
+      console.log("✅ Video element ready, requesting camera access...");
 
-      // Request camera with progressive constraints
+      // Request camera access
       let stream: MediaStream;
       
       try {
-        // Try with environment camera first
+        // Try environment camera first (back camera on mobile)
         stream = await navigator.mediaDevices.getUserMedia({
           video: { 
             facingMode: { exact: "environment" },
@@ -133,7 +106,7 @@ const QrScannerV2 = ({
         console.log("✅ Environment camera obtained");
       } catch (envError) {
         console.log("⚠️ Environment camera not available, trying any camera...");
-        // Fallback to any camera
+        // Fallback to any available camera
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             width: { ideal: 1280 },
@@ -141,7 +114,7 @@ const QrScannerV2 = ({
           },
           audio: false
         });
-        console.log("✅ Front/any camera obtained");
+        console.log("✅ Any available camera obtained");
       }
 
       console.log("✅ Camera stream obtained:", {
@@ -149,15 +122,8 @@ const QrScannerV2 = ({
         tracks: stream.getTracks().length
       });
 
-      if (!mountedRef.current) {
-        console.log("⚠️ Component unmounted, stopping stream");
-        stream.getTracks().forEach(track => track.stop());
-        return;
-      }
-
       streamRef.current = stream;
       
-      // Attach stream to video with retry mechanism
       const video = videoRef.current;
       if (!video) {
         stream.getTracks().forEach(track => track.stop());
@@ -169,54 +135,52 @@ const QrScannerV2 = ({
       video.playsInline = true;
       video.autoplay = true;
       
-      console.log("🎥 Waiting for video to load...");
+      console.log("🎥 Waiting for video to be ready...");
 
-      // Wait for video to be ready with better error handling
+      // Wait for video to be ready
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
           console.error("⏰ Video load timeout");
           reject(new Error("VIDEO_LOAD_TIMEOUT"));
-        }, 8000); // Increased timeout
-
-        const cleanup = () => {
-          clearTimeout(timeout);
-          video.removeEventListener('loadedmetadata', onLoadedMetadata);
-          video.removeEventListener('error', onError);
-        };
+        }, 10000);
 
         const onLoadedMetadata = () => {
-          console.log("📺 Video metadata loaded, dimensions:", video.videoWidth, "x", video.videoHeight);
+          console.log("📺 Video metadata loaded");
           
           video.play()
             .then(() => {
               console.log("▶️ Video playing successfully");
-              cleanup();
+              clearTimeout(timeout);
+              video.removeEventListener('loadedmetadata', onLoadedMetadata);
+              video.removeEventListener('error', onError);
               resolve();
             })
             .catch((err) => {
               console.error("❌ Play failed:", err);
-              cleanup();
+              clearTimeout(timeout);
+              video.removeEventListener('loadedmetadata', onLoadedMetadata);
+              video.removeEventListener('error', onError);
               reject(new Error("VIDEO_PLAY_FAILED"));
             });
         };
 
         const onError = (err: Event) => {
           console.error("❌ Video error:", err);
-          cleanup();
+          clearTimeout(timeout);
+          video.removeEventListener('loadedmetadata', onLoadedMetadata);
+          video.removeEventListener('error', onError);
           reject(new Error("VIDEO_LOAD_ERROR"));
         };
 
-        video.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
-        video.addEventListener('error', onError, { once: true });
+        video.addEventListener('loadedmetadata', onLoadedMetadata);
+        video.addEventListener('error', onError);
 
-        // Trigger load if needed
+        // If already loaded, trigger immediately
         if (video.readyState >= 2) {
-          console.log("📺 Video already loaded, playing immediately");
+          console.log("📺 Video already loaded");
           onLoadedMetadata();
         }
       });
-
-      if (!mountedRef.current) return;
 
       console.log("✅ Camera ready, starting QR scan");
       setState('camera-ready');
@@ -225,8 +189,6 @@ const QrScannerV2 = ({
     } catch (err: any) {
       console.error("💥 Camera initialization error:", err);
       
-      if (!mountedRef.current) return;
-
       let errorMessage = "Erro ao acessar câmera";
       
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
@@ -238,13 +200,13 @@ const QrScannerV2 = ({
       } else if (err.message === 'BROWSER_NOT_SUPPORTED') {
         errorMessage = "Navegador não suporta acesso à câmera.";
       } else if (err.message === 'VIDEO_ELEMENT_NOT_FOUND' || err.message === 'VIDEO_ELEMENT_LOST') {
-        errorMessage = "Erro ao carregar componente de vídeo. Tente fechar e abrir novamente.";
+        errorMessage = "Erro ao carregar componente de vídeo. Feche e abra novamente.";
       } else if (err.message === 'VIDEO_LOAD_TIMEOUT') {
         errorMessage = "Tempo esgotado ao carregar câmera. Verifique as permissões.";
       } else if (err.message === 'VIDEO_PLAY_FAILED') {
-        errorMessage = "Erro ao iniciar reprodução do vídeo. Tente novamente.";
+        errorMessage = "Erro ao iniciar vídeo. Tente novamente.";
       } else if (err.message === 'VIDEO_LOAD_ERROR') {
-        errorMessage = "Erro ao carregar stream de vídeo. Reinicie o navegador.";
+        errorMessage = "Erro ao carregar stream de vídeo.";
       }
       
       setError(errorMessage);
@@ -257,8 +219,31 @@ const QrScannerV2 = ({
       });
       
       cleanup();
+    } finally {
+      initializingRef.current = false;
     }
-  };
+  }, [cleanup, toast]);
+
+  // Handle dialog open/close
+  useEffect(() => {
+    if (open) {
+      console.log("🎬 QR Scanner opened");
+      setState('initializing');
+      setError("");
+      setManualCode("");
+      setValidating(false);
+      
+      // Small delay to ensure dialog and video element are mounted
+      const timer = setTimeout(() => {
+        initializeCamera();
+      }, 350);
+      
+      return () => clearTimeout(timer);
+    } else {
+      console.log("🛑 QR Scanner closed");
+      cleanup();
+    }
+  }, [open, initializeCamera, cleanup]);
 
   const startScanning = () => {
     if (scanIntervalRef.current) {
@@ -269,7 +254,7 @@ const QrScannerV2 = ({
     
     scanIntervalRef.current = window.setInterval(() => {
       scanFrame();
-    }, 150); // Scan every 150ms for good balance
+    }, 150);
   };
 
   const scanFrame = useCallback(() => {
@@ -462,7 +447,7 @@ const QrScannerV2 = ({
                 <Button 
                   onClick={() => {
                     setState('initializing');
-                    initializeCamera();
+                    setTimeout(() => initializeCamera(), 100);
                   }} 
                   variant="outline" 
                   className="flex-1"
@@ -540,6 +525,17 @@ const QrScannerV2 = ({
               {/* Hidden canvas for scanning */}
               <canvas ref={canvasRef} className="hidden" />
             </>
+          )}
+
+          {/* Always render video element to ensure ref is available */}
+          {state !== 'camera-ready' && (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="hidden"
+            />
           )}
         </div>
 
