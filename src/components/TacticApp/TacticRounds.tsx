@@ -122,6 +122,7 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Buscar rondas atribuídas ao tático OU rondas não atribuídas (user_id NULL)
       const { data, error } = await supabase
         .from("rounds")
         .select(`
@@ -130,7 +131,7 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
           vehicles (license_plate, brand, model),
           round_templates (name)
         `)
-        .eq("user_id", user.id)
+        .or(`user_id.eq.${user.id},user_id.is.null`)
         .in("status", ["pending", "active", "incident"])
         .order("created_at", { ascending: false });
 
@@ -157,9 +158,14 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
     if (!selectedRound) return;
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
+      // Atualizar ronda e atribuir ao tático que está iniciando
       const { error } = await supabase
         .from("rounds")
         .update({ 
+          user_id: user.id, // Atribuir ronda ao tático atual
           status: 'active',
           start_time: new Date().toISOString(),
           start_odometer: odometer,
@@ -173,7 +179,7 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
 
       toast({
         title: "Ronda iniciada",
-        description: `Ronda iniciada com odômetro ${odometer} km`,
+        description: `Ronda atribuída a você e iniciada com odômetro ${odometer} km`,
       });
 
       setShowOdometerDialog(false);

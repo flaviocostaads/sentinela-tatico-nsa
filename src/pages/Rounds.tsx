@@ -60,15 +60,9 @@ interface Client {
   address: string;
 }
 
-interface Tactic {
-  user_id: string;
-  name: string;
-}
-
 const Rounds = () => {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [templates, setTemplates] = useState<RoundTemplate[]>([]);
-  const [tactics, setTactics] = useState<Tactic[]>([]);
   const [loading, setLoading] = useState(true);
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const [createRoundDialogOpen, setCreateRoundDialogOpen] = useState(false);
@@ -76,14 +70,12 @@ const Rounds = () => {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     template_id: "",
-    tactic_ids: [] as string[],
     vehicle_id: ""
   });
   const [editingRound, setEditingRound] = useState<Round | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editFormData, setEditFormData] = useState({
     template_ids: [] as string[],
-    tactic_id: "",
     vehicle_id: ""
   });
   const { toast } = useToast();
@@ -92,7 +84,6 @@ const Rounds = () => {
   useEffect(() => {
     fetchRounds();
     fetchTemplates();
-    fetchTactics();
     fetchVehicles();
   }, []);
 
@@ -154,23 +145,6 @@ const Rounds = () => {
     }
   };
 
-
-  const fetchTactics = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("user_id, name")
-        .eq("role", "tatico")
-        .eq("active", true)
-        .order("name");
-
-      if (error) throw error;
-      setTactics(data || []);
-    } catch (error) {
-      console.error("Error fetching tactics:", error);
-    }
-  };
-
   const fetchVehicles = async () => {
     try {
       const { data, error } = await supabase
@@ -219,7 +193,7 @@ const Rounds = () => {
   const handleNewRound = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.template_id || formData.tactic_ids.length === 0 || !formData.vehicle_id) {
+    if (!formData.template_id || !formData.vehicle_id) {
       toast({
         title: "Erro",
         description: "Preencha todos os campos obrigatórios",
@@ -236,51 +210,32 @@ const Rounds = () => {
         throw new Error("Template não encontrado");
       }
 
-      // Criar rondas para cada tático selecionado
-      const roundsToCreate = [];
-      const assignmentsToCreate = [];
+      // Criar ronda sem user_id - disponível para todos os táticos
+      const roundData = {
+        template_id: formData.template_id,
+        user_id: null, // NULL = disponível para qualquer tático
+        vehicle_id: formData.vehicle_id,
+        vehicle: selectedVehicle?.type || 'car' as 'car' | 'motorcycle',
+        status: 'pending' as const,
+        round_number: 1,
+        client_id: selectedTemplate.round_template_checkpoints[0]?.client_id,
+        current_checkpoint_index: 0,
+        requires_signature: selectedTemplate.requires_signature || false
+      };
 
-      for (const tacticId of formData.tactic_ids) {
-        const roundId = crypto.randomUUID();
-        roundsToCreate.push({
-          id: roundId,
-          template_id: formData.template_id,
-          user_id: tacticId,
-          vehicle_id: formData.vehicle_id,
-          vehicle: selectedVehicle?.type || 'car' as 'car' | 'motorcycle',
-          status: 'pending' as const,
-          round_number: 1,
-          client_id: selectedTemplate.round_template_checkpoints[0]?.client_id,
-          current_checkpoint_index: 0,
-          requires_signature: selectedTemplate.requires_signature || false
-        });
-        
-        // Criar atribuição para cada tático
-        assignmentsToCreate.push({
-          round_id: roundId,
-          user_id: tacticId
-        });
-      }
-
-      const { error: roundsError } = await supabase
+      const { error: roundError } = await supabase
         .from("rounds")
-        .insert(roundsToCreate);
+        .insert([roundData]);
 
-      if (roundsError) throw roundsError;
-
-      const { error: assignmentsError } = await supabase
-        .from("round_assignments")
-        .insert(assignmentsToCreate);
-
-      if (assignmentsError) throw assignmentsError;
+      if (roundError) throw roundError;
 
       toast({
         title: "Sucesso",
-        description: `${roundsToCreate.length} rondas criadas para ${formData.tactic_ids.length} tático(s)!`,
+        description: "Ronda criada com sucesso! Disponível para todos os táticos.",
       });
 
       setCreateRoundDialogOpen(false);
-      setFormData({ template_id: "", tactic_ids: [], vehicle_id: "" });
+      setFormData({ template_id: "", vehicle_id: "" });
       fetchRounds();
     } catch (error) {
       console.error("Error creating rounds:", error);
@@ -434,7 +389,6 @@ const Rounds = () => {
     setEditingRound(round);
     setEditFormData({
       template_ids: round.template_id ? [round.template_id] : [],
-      tactic_id: round.user_id,
       vehicle_id: round.vehicle_id || ""
     });
     setEditDialogOpen(true);
@@ -458,7 +412,6 @@ const Rounds = () => {
         .from("rounds")
         .update({
           template_id: editFormData.template_ids[0],
-          user_id: editFormData.tactic_id,
           vehicle_id: editFormData.vehicle_id
         })
         .eq("id", editingRound.id);
@@ -472,7 +425,7 @@ const Rounds = () => {
 
       setEditDialogOpen(false);
       setEditingRound(null);
-      setEditFormData({ template_ids: [], tactic_id: "", vehicle_id: "" });
+      setEditFormData({ template_ids: [], vehicle_id: "" });
       fetchRounds();
     } catch (error) {
       console.error("Error updating round:", error);
@@ -542,42 +495,6 @@ const Rounds = () => {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="tactics">Táticos</Label>
-                      <div className="space-y-2 max-h-32 overflow-y-auto border rounded-md p-2">
-                        {tactics.map((tactic) => (
-                          <div key={tactic.user_id} className="flex items-center space-x-2">
-                            <input
-                              type="checkbox"
-                              id={`tactic-${tactic.user_id}`}
-                              checked={formData.tactic_ids.includes(tactic.user_id)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setFormData({
-                                    ...formData,
-                                    tactic_ids: [...formData.tactic_ids, tactic.user_id]
-                                  });
-                                } else {
-                                  setFormData({
-                                    ...formData,
-                                    tactic_ids: formData.tactic_ids.filter(id => id !== tactic.user_id)
-                                  });
-                                }
-                              }}
-                              className="rounded border-gray-300"
-                            />
-                            <Label htmlFor={`tactic-${tactic.user_id}`} className="text-sm">
-                              {tactic.name}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                      {formData.tactic_ids.length > 0 && (
-                        <p className="text-sm text-muted-foreground">
-                          {formData.tactic_ids.length} tático(s) selecionado(s)
-                        </p>
-                      )}
-                    </div>
-                    <div className="space-y-2">
                       <Label htmlFor="vehicle">Veículo</Label>
                       <Select value={formData.vehicle_id} onValueChange={(value) => setFormData({ ...formData, vehicle_id: value })}>
                         <SelectTrigger>
@@ -592,12 +509,15 @@ const Rounds = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="text-sm text-muted-foreground p-3 bg-muted rounded-md">
+                      <p>💡 <strong>Atenção:</strong> Esta ronda ficará disponível para <strong>todos os táticos</strong>. O tático que iniciar a ronda será automaticamente atribuído a ela.</p>
+                    </div>
                     <Button 
                       type="submit" 
                       className="w-full bg-tactical-green hover:bg-tactical-green/90"
-                      disabled={!formData.template_id || formData.tactic_ids.length === 0 || !formData.vehicle_id}
+                      disabled={!formData.template_id || !formData.vehicle_id}
                     >
-                      Criar Rondas do Template
+                      Criar Ronda
                     </Button>
                   </form>
                 </DialogContent>
@@ -608,7 +528,7 @@ const Rounds = () => {
                 setEditDialogOpen(open);
                 if (!open) {
                   setEditingRound(null);
-                  setEditFormData({ template_ids: [], tactic_id: "", vehicle_id: "" });
+                  setEditFormData({ template_ids: [], vehicle_id: "" });
                 }
               }}>
                 <DialogContent>
@@ -646,21 +566,6 @@ const Rounds = () => {
                           </div>
                         ))}
                       </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="edit_tactic">Tático</Label>
-                      <Select value={editFormData.tactic_id} onValueChange={(value) => setEditFormData({ ...editFormData, tactic_id: value })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione um tático" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {tactics.map((tactic) => (
-                            <SelectItem key={tactic.user_id} value={tactic.user_id}>
-                              {tactic.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="edit_vehicle">Veículo</Label>

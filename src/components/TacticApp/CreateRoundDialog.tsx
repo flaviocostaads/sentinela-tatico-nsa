@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-import { Calendar, Car, Bike, User, MapPin } from "lucide-react";
+import { Calendar, Car, Bike, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -29,21 +28,13 @@ interface Vehicle {
   type: 'car' | 'motorcycle';
 }
 
-interface Tactic {
-  id: string;
-  name: string;
-  role: string;
-}
-
 const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialogProps) => {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
-  const [tactics, setTactics] = useState<Tactic[]>([]);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     template_id: "",
-    vehicle_id: "",
-    tactic_id: ""
+    vehicle_id: ""
   });
   const { toast } = useToast();
 
@@ -51,7 +42,6 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
     if (isOpen) {
       fetchTemplates();
       fetchVehicles();
-      fetchTactics();
       resetForm();
     }
   }, [isOpen]);
@@ -59,8 +49,7 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
   const resetForm = () => {
     setFormData({
       template_id: "",
-      vehicle_id: "",
-      tactic_id: ""
+      vehicle_id: ""
     });
   };
 
@@ -139,86 +128,14 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
     }
   };
 
-  const fetchTactics = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Get current user's profile to check role
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("id, name, role, user_id")
-        .eq("user_id", user.id)
-        .single();
-
-      if (error) {
-        console.error("Error fetching user profile:", error);
-        throw error;
-      }
-      
-      console.log("Current user profile:", profile);
-      
-      if (profile?.role === "tatico") {
-        // For tactical users, auto-select themselves
-        setTactics([{
-          id: profile.user_id,
-          name: profile.name,
-          role: profile.role
-        }]);
-        
-        // Auto-select the current user
-        setFormData(prev => ({ ...prev, tactic_id: profile.user_id }));
-        console.log("Auto-selected tactical user:", profile.name);
-      } else if (profile?.role === "admin" || profile?.role === "operador") {
-        // For admin/operator users, fetch all tactical users
-        const { data: tacticalUsers, error: tacticalError } = await supabase
-          .from("profiles")
-          .select("id, name, role, user_id")
-          .eq("role", "tatico")
-          .order("name");
-
-        if (tacticalError) {
-          console.error("Error fetching tactical users:", tacticalError);
-          throw tacticalError;
-        }
-
-        console.log("Available tactical users:", tacticalUsers);
-        
-        if (tacticalUsers && tacticalUsers.length > 0) {
-          setTactics(tacticalUsers.map(user => ({
-            id: user.user_id,
-            name: user.name,
-            role: user.role
-          })));
-        } else {
-          toast({
-            title: "Aviso",
-            description: "Nenhum usuário tático encontrado no sistema",
-            variant: "destructive",
-          });
-        }
-      }
-    } catch (error) {
-      console.error("Error fetching tactics:", error);
-      toast({
-        title: "Erro",
-        description: "Erro ao carregar usuários táticos",
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      // Get selected tactic
+      // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
-
-      // For tactical users, use their own user_id from auth
-      const selectedTacticUserId = user.id;
 
       // Get selected vehicle to determine type
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
@@ -264,10 +181,10 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
 
       console.log("Template validated with checkpoints:", checkpoints.length);
 
-      // Create ONE round using the template (not tied to a specific client)
+      // Create round WITHOUT user_id - available for any tactical user
       const roundData = {
-        user_id: selectedTacticUserId,
-        client_id: checkpoints[0].client_id, // Use first client as reference
+        user_id: null, // NULL = disponível para qualquer tático
+        client_id: checkpoints[0].client_id,
         template_id: formData.template_id,
         vehicle_id: formData.vehicle_id,
         vehicle: selectedVehicle.type,
@@ -288,7 +205,7 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
 
       toast({
         title: "Sucesso",
-        description: "Ronda criada com sucesso!",
+        description: "Ronda criada com sucesso! Disponível para todos os táticos.",
       });
 
       onRoundCreated();
@@ -320,28 +237,6 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="tactic_id">Nome do Tático</Label>
-            <Select 
-              value={formData.tactic_id} 
-              onValueChange={(value) => setFormData({ ...formData, tactic_id: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um tático" />
-              </SelectTrigger>
-              <SelectContent>
-                {tactics.map((tactic) => (
-                  <SelectItem key={tactic.id} value={tactic.id}>
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4" />
-                      <span>{tactic.name}</span>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="template_id">Template de Ronda</Label>
             <Select 
@@ -397,6 +292,10 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
             </Select>
           </div>
 
+          <div className="text-sm text-muted-foreground p-3 bg-muted rounded-md">
+            <p>💡 <strong>Atenção:</strong> Esta ronda ficará disponível para <strong>todos os táticos</strong>. O tático que iniciar a ronda será automaticamente atribuído a ela.</p>
+          </div>
+
           <div className="flex gap-2 pt-4">
             <Button
               type="button"
@@ -408,7 +307,7 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
             </Button>
             <Button
               type="submit"
-              disabled={loading || !formData.template_id || !formData.vehicle_id || !formData.tactic_id}
+              disabled={loading || !formData.template_id || !formData.vehicle_id}
               className="flex-1 bg-tactical-green hover:bg-tactical-green/90"
             >
               {loading ? "Criando..." : "Criar Ronda"}

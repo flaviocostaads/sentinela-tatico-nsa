@@ -730,7 +730,7 @@ export type Database = {
           status: Database["public"]["Enums"]["round_status"]
           template_id: string | null
           updated_at: string
-          user_id: string
+          user_id: string | null
           vehicle: Database["public"]["Enums"]["vehicle_type"]
           vehicle_id: string | null
         }
@@ -753,7 +753,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["round_status"]
           template_id?: string | null
           updated_at?: string
-          user_id: string
+          user_id?: string | null
           vehicle: Database["public"]["Enums"]["vehicle_type"]
           vehicle_id?: string | null
         }
@@ -776,7 +776,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["round_status"]
           template_id?: string | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
           vehicle?: Database["public"]["Enums"]["vehicle_type"]
           vehicle_id?: string | null
         }
