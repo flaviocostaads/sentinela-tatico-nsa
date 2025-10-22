@@ -32,9 +32,9 @@ interface Round {
     name: string;
     address: string;
   };
-  profiles: {
+  profiles?: {
     name: string;
-  };
+  } | null;
   round_templates?: {
     name: string;
     active: boolean;
@@ -662,7 +662,9 @@ const Rounds = () => {
                                   </span>
                                 )}
                               </CardTitle>
-                              <p className="text-sm text-muted-foreground">{round.profiles.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {round.profiles?.name || "Não atribuído"}
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -735,7 +737,9 @@ const Rounds = () => {
                                   </span>
                                 )}
                               </CardTitle>
-                              <p className="text-sm text-muted-foreground">{round.profiles.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {round.profiles?.name || "Não atribuído"}
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -816,7 +820,9 @@ const Rounds = () => {
                                   </span>
                                 )}
                               </CardTitle>
-                              <p className="text-sm text-muted-foreground">{round.profiles.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {round.profiles?.name || "Não atribuído"}
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -890,7 +896,9 @@ const Rounds = () => {
                                   </span>
                                 )}
                               </CardTitle>
-                              <p className="text-sm text-muted-foreground">{round.profiles.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {round.profiles?.name || "Não atribuído"}
+                              </p>
                             </div>
                           </div>
                         </div>
