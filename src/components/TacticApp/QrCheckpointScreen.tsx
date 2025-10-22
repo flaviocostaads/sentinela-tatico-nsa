@@ -68,6 +68,50 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
       setLoading(true);
       console.log(`Fetching checkpoint data for ID: ${checkpointId}`);
 
+      // Check if this is a virtual checkpoint (template-based)
+      const isVirtualCheckpoint = checkpointId.startsWith('virtual_');
+      
+      if (isVirtualCheckpoint) {
+        console.log("📋 Processing virtual checkpoint...");
+        
+        // Extract the template checkpoint ID and client ID from virtual ID
+        // Format: virtual_{template_checkpoint_id}_{client_id}
+        const parts = checkpointId.replace('virtual_', '').split('_');
+        const templateCheckpointId = parts[0];
+        const clientId = parts.slice(1).join('_'); // In case UUID has underscores
+        
+        console.log("Template Checkpoint ID:", templateCheckpointId);
+        console.log("Client ID:", clientId);
+        
+        // Fetch client data
+        const { data: clientData, error: clientError } = await supabase
+          .from("clients")
+          .select("id, name, address")
+          .eq("id", clientId)
+          .single();
+        
+        if (clientError) {
+          console.error("Error fetching client:", clientError);
+          throw new Error("Cliente não encontrado");
+        }
+        
+        console.log("✅ Client data:", clientData);
+        
+        // Create a virtual checkpoint object
+        setCheckpoint({
+          id: checkpointId,
+          name: `Ponto de Verificação - ${clientData.name}`,
+          description: `Ronda em ${clientData.name} - ${clientData.address}`,
+          clients: clientData,
+          checklist_items: [],
+          required_signature: false
+        });
+        
+        setupChecklist([]);
+        setLoading(false);
+        return;
+      }
+
       // First try to get checkpoint from checkpoints table
       const { data: checkpointData, error: checkpointError } = await supabase
         .from("checkpoints")
@@ -456,8 +500,15 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
         clientName: checkpoint?.clients?.name
       });
 
-      // First, get the current checkpoint's client_id
+      // Get the current checkpoint's client_id
       let currentClientId = checkpoint?.clients?.id;
+      
+      // For virtual checkpoints, extract client_id from the checkpoint ID
+      if (expectedCheckpointId.startsWith('virtual_')) {
+        const parts = expectedCheckpointId.replace('virtual_', '').split('_');
+        currentClientId = parts.slice(1).join('_'); // Client ID is after the first underscore
+        console.log("📋 Extracted client ID from virtual checkpoint:", currentClientId);
+      }
       
       // If we don't have client_id yet, try to get it from the checkpoint name
       if (!currentClientId && checkpoint?.clients?.name) {

@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Camera, Gauge, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -20,10 +20,62 @@ const OdometerDialog = ({ open, onClose, onComplete, vehiclePlate, roundId, vehi
   const [odometer, setOdometer] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
+  const [lastOdometer, setLastOdometer] = useState<number | null>(null);
+  const [isLoadingLastOdometer, setIsLoadingLastOdometer] = useState(false);
   const { toast } = useToast();
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Fetch last odometer reading when dialog opens
+  useEffect(() => {
+    if (open && vehicleId) {
+      fetchLastOdometer();
+    }
+  }, [open, vehicleId]);
+
+  const fetchLastOdometer = async () => {
+    if (!vehicleId) return;
+    
+    try {
+      setIsLoadingLastOdometer(true);
+      console.log("Fetching last odometer for vehicle:", vehicleId);
+
+      // Get the last odometer reading from odometer_records
+      const { data: lastRecord, error: recordError } = await supabase
+        .from('odometer_records')
+        .select('odometer_reading')
+        .eq('vehicle_id', vehicleId)
+        .order('recorded_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (recordError && recordError.code !== 'PGRST116') {
+        throw recordError;
+      }
+
+      if (lastRecord) {
+        setLastOdometer(lastRecord.odometer_reading);
+        console.log("Last odometer reading:", lastRecord.odometer_reading);
+      } else {
+        // If no records, get from vehicle's current_odometer
+        const { data: vehicleData, error: vehicleError } = await supabase
+          .from('vehicles')
+          .select('current_odometer')
+          .eq('id', vehicleId)
+          .single();
+
+        if (!vehicleError && vehicleData) {
+          setLastOdometer(vehicleData.current_odometer);
+          console.log("Vehicle current odometer:", vehicleData.current_odometer);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching last odometer:", error);
+    } finally {
+      setIsLoadingLastOdometer(false);
+    }
+  };
 
   const takePhoto = () => {
     if (videoRef.current && canvasRef.current) {
@@ -149,7 +201,16 @@ const OdometerDialog = ({ open, onClose, onComplete, vehiclePlate, roundId, vehi
 
   const canComplete = () => {
     const odometerValue = parseInt(odometer);
-    return !isNaN(odometerValue) && odometerValue > 0 && photo !== null;
+    if (isNaN(odometerValue) || odometerValue <= 0 || photo === null) {
+      return false;
+    }
+    
+    // Validate that new odometer is greater than last odometer
+    if (lastOdometer !== null && odometerValue <= lastOdometer) {
+      return false;
+    }
+    
+    return true;
   };
 
   const handleComplete = async () => {
@@ -157,6 +218,16 @@ const OdometerDialog = ({ open, onClose, onComplete, vehiclePlate, roundId, vehi
     
     try {
       const odometerValue = parseInt(odometer);
+      
+      // Additional validation with user-friendly message
+      if (lastOdometer !== null && odometerValue <= lastOdometer) {
+        toast({
+          title: "Odômetro inválido",
+          description: `O odômetro deve ser maior que ${lastOdometer} km (última leitura)`,
+          variant: "destructive",
+        });
+        return;
+      }
       
       // Upload photo to storage
       const { data: { user } } = await supabase.auth.getUser();
@@ -256,14 +327,31 @@ const OdometerDialog = ({ open, onClose, onComplete, vehiclePlate, roundId, vehi
           {/* Odometer Input */}
           <div className="space-y-2">
             <Label htmlFor="odometer">Quilometragem Atual <span className="text-tactical-red">*</span></Label>
+            {isLoadingLastOdometer ? (
+              <div className="text-sm text-muted-foreground">Carregando último odômetro...</div>
+            ) : lastOdometer !== null && (
+              <div className="text-sm text-muted-foreground mb-1">
+                Última leitura: <span className="font-semibold">{lastOdometer} km</span>
+              </div>
+            )}
             <Input
               id="odometer"
               type="number"
               value={odometer}
               onChange={(e) => setOdometer(e.target.value)}
-              placeholder="Ex: 125430"
-              min="0"
+              placeholder={lastOdometer ? `Maior que ${lastOdometer} km` : "Ex: 125430"}
+              min={lastOdometer ? lastOdometer + 1 : 0}
+              className={
+                odometer && lastOdometer !== null && parseInt(odometer) <= lastOdometer
+                  ? "border-destructive"
+                  : ""
+              }
             />
+            {odometer && lastOdometer !== null && parseInt(odometer) <= lastOdometer && (
+              <p className="text-sm text-destructive">
+                O valor deve ser maior que {lastOdometer} km
+              </p>
+            )}
           </div>
 
           {/* Photo Section */}
@@ -354,7 +442,11 @@ const OdometerDialog = ({ open, onClose, onComplete, vehiclePlate, roundId, vehi
 
           {!canComplete() && (
             <p className="text-xs text-center text-muted-foreground">
-              Insira o odômetro e tire uma foto para continuar
+              {!odometer || !photo 
+                ? "Insira o odômetro e tire uma foto para continuar"
+                : lastOdometer !== null && parseInt(odometer) <= lastOdometer
+                ? `O odômetro deve ser maior que ${lastOdometer} km`
+                : "Complete todos os campos obrigatórios"}
             </p>
           )}
         </div>
