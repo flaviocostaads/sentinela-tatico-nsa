@@ -20,36 +20,24 @@ interface Template {
   shift_type: string;
 }
 
-interface Vehicle {
-  id: string;
-  license_plate: string;
-  brand: string;
-  model: string;
-  type: 'car' | 'motorcycle';
-}
-
 const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialogProps) => {
   const [templates, setTemplates] = useState<Template[]>([]);
-  const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    template_id: "",
-    vehicle_id: ""
+    template_id: ""
   });
   const { toast } = useToast();
 
   useEffect(() => {
     if (isOpen) {
       fetchTemplates();
-      fetchVehicles();
       resetForm();
     }
   }, [isOpen]);
 
   const resetForm = () => {
     setFormData({
-      template_id: "",
-      vehicle_id: ""
+      template_id: ""
     });
   };
 
@@ -87,46 +75,6 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
     }
   };
 
-  const fetchVehicles = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Get user profile to check role
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('user_id', user.id)
-        .single();
-
-      if (profileError) {
-        console.error("Error fetching profile:", profileError);
-        return;
-      }
-
-      // Admin can see all vehicles, tactical users see all available vehicles
-      const { data, error } = await supabase
-        .from("vehicles")
-        .select("id, license_plate, brand, model, type")
-        .eq("active", true)
-        .order("license_plate");
-
-      if (error) {
-        console.error("Error fetching vehicles:", error);
-        throw error;
-      }
-      
-      console.log('Vehicles loaded:', data);
-      setVehicles(data || []);
-    } catch (error) {
-      console.error("Error fetching vehicles:", error);
-      toast({
-        title: "Erro",
-        description: "Erro ao carregar veículos. Verifique as permissões.",
-        variant: "destructive",
-      });
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,10 +84,6 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
-
-      // Get selected vehicle to determine type
-      const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
-      if (!selectedVehicle) throw new Error("Veículo não encontrado");
 
       // Get template and checkpoints info
       console.log("Fetching template and checkpoints for:", formData.template_id);
@@ -181,13 +125,13 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
 
       console.log("Template validated with checkpoints:", checkpoints.length);
 
-      // Create round WITHOUT user_id - available for any tactical user
+      // Create round WITHOUT user_id AND vehicle - available for any tactical user
       const roundData = {
         user_id: null, // NULL = disponível para qualquer tático
         client_id: checkpoints[0].client_id,
         template_id: formData.template_id,
-        vehicle_id: formData.vehicle_id,
-        vehicle: selectedVehicle.type,
+        vehicle_id: null, // Será escolhido pelo tático ao iniciar
+        vehicle: null, // Será definido ao iniciar a ronda
         status: 'pending' as const,
         current_checkpoint_index: 0,
         round_number: 1,
@@ -258,43 +202,13 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
                     </div>
                   </SelectItem>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
+          </SelectContent>
+        </Select>
+      </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="vehicle_id">Veículo</Label>
-            <Select 
-              value={formData.vehicle_id} 
-              onValueChange={(value) => setFormData({ ...formData, vehicle_id: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione um veículo" />
-              </SelectTrigger>
-              <SelectContent>
-                {vehicles.map((vehicle) => {
-                  const Icon = getVehicleIcon(vehicle.type);
-                  return (
-                    <SelectItem key={vehicle.id} value={vehicle.id}>
-                      <div className="flex items-center gap-2">
-                        <Icon className="w-4 h-4" />
-                        <div>
-                          <div className="font-medium">{vehicle.license_plate}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {vehicle.brand} {vehicle.model}
-                          </div>
-                        </div>
-                      </div>
-                    </SelectItem>
-                  );
-                })}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="text-sm text-muted-foreground p-3 bg-muted rounded-md">
-            <p>💡 <strong>Atenção:</strong> Esta ronda ficará disponível para <strong>todos os táticos</strong>. O tático que iniciar a ronda será automaticamente atribuído a ela.</p>
-          </div>
+      <div className="text-sm text-muted-foreground p-3 bg-muted rounded-md">
+        <p>💡 <strong>Atenção:</strong> Esta ronda ficará disponível para <strong>todos os táticos</strong>. O tático escolherá o veículo ao iniciar a ronda.</p>
+      </div>
 
           <div className="flex gap-2 pt-4">
             <Button
@@ -307,7 +221,7 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
             </Button>
             <Button
               type="submit"
-              disabled={loading || !formData.template_id || !formData.vehicle_id}
+              disabled={loading || !formData.template_id}
               className="flex-1 bg-tactical-green hover:bg-tactical-green/90"
             >
               {loading ? "Criando..." : "Criar Ronda"}

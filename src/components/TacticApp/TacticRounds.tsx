@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import CreateRoundDialog from "./CreateRoundDialog";
 import OdometerDialog from "./OdometerDialog";
 import RoundCompaniesProgress from "./RoundCompaniesProgress";
+import VehicleSelectionDialog from "./VehicleSelectionDialog";
 
 interface TacticRoundsProps {
   onBack: () => void;
@@ -42,8 +43,14 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
   const [rounds, setRounds] = useState<Round[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showVehicleDialog, setShowVehicleDialog] = useState(false);
   const [showOdometerDialog, setShowOdometerDialog] = useState(false);
   const [selectedRound, setSelectedRound] = useState<Round | null>(null);
+  const [selectedVehicleData, setSelectedVehicleData] = useState<{
+    vehicleId: string | null;
+    vehicleType: 'car' | 'motorcycle' | 'on_foot' | null;
+    vehiclePlate?: string;
+  } | null>(null);
   const [showCheckpointsList, setShowCheckpointsList] = useState(false);
   const { user } = useAuth();
   const [profile, setProfile] = useState<any>(null);
@@ -151,42 +158,93 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
 
   const handleStartRound = (round: Round) => {
     setSelectedRound(round);
-    setShowOdometerDialog(true);
+    setShowVehicleDialog(true);
   };
 
-  const handleOdometerComplete = async (odometer: number, photo: string) => {
+  const handleVehicleSelected = (vehicleId: string | null, vehicleType: 'car' | 'motorcycle' | 'on_foot' | null, vehiclePlate?: string) => {
+    setSelectedVehicleData({ vehicleId, vehicleType, vehiclePlate });
+    setShowVehicleDialog(false);
+    
+    // Se for a pé, inicia direto sem odômetro
+    if (vehicleType === 'on_foot') {
+      handleStartRoundOnFoot();
+    } else {
+      // Se for com veículo, abre dialog de odômetro
+      setShowOdometerDialog(true);
+    }
+  };
+
+  const handleStartRoundOnFoot = async () => {
     if (!selectedRound) return;
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuário não autenticado");
+      if (!user) throw new Error('User not authenticated');
 
-      // Atualizar ronda e atribuir ao tático que está iniciando
-      const { error } = await supabase
-        .from("rounds")
-        .update({ 
-          user_id: user.id, // Atribuir ronda ao tático atual
+      const { error: updateError } = await supabase
+        .from('rounds')
+        .update({
           status: 'active',
+          user_id: user.id,
           start_time: new Date().toISOString(),
-          start_odometer: odometer,
-          initial_odometer: odometer
+          vehicle_id: null,
+          vehicle: 'on_foot',
+          initial_odometer: null,
         })
-        .eq("id", selectedRound.id);
+        .eq('id', selectedRound.id);
 
-      if (error) throw error;
-
-      // TODO: Upload photo to storage and create photo record
+      if (updateError) throw updateError;
 
       toast({
         title: "Ronda iniciada",
-        description: `Ronda atribuída a você e iniciada com odômetro ${odometer} km`,
+        description: "Ronda iniciada com sucesso a pé",
       });
 
-      setShowOdometerDialog(false);
-      setSelectedRound(null);
       fetchRounds();
+      setSelectedRound(null);
+      setSelectedVehicleData(null);
     } catch (error) {
-      console.error("Error starting round:", error);
+      console.error('Error starting round on foot:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao iniciar ronda",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleOdometerComplete = async (odometer: number, photo: string) => {
+    if (!selectedRound || !selectedVehicleData) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { error: updateError } = await supabase
+        .from('rounds')
+        .update({
+          status: 'active',
+          user_id: user.id,
+          start_time: new Date().toISOString(),
+          initial_odometer: odometer,
+          vehicle_id: selectedVehicleData.vehicleId,
+          vehicle: selectedVehicleData.vehicleType,
+        })
+        .eq('id', selectedRound.id);
+
+      if (updateError) throw updateError;
+
+      toast({
+        title: "Ronda iniciada",
+        description: "Ronda iniciada com sucesso",
+      });
+
+      fetchRounds();
+      setSelectedRound(null);
+      setSelectedVehicleData(null);
+      setShowOdometerDialog(false);
+    } catch (error) {
+      console.error('Error completing odometer:', error);
       toast({
         title: "Erro",
         description: "Erro ao iniciar ronda",
@@ -423,20 +481,29 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
         }}
       />
 
+      {/* Vehicle Selection Dialog */}
+      <VehicleSelectionDialog
+        open={showVehicleDialog}
+        onClose={() => {
+          setShowVehicleDialog(false);
+          setSelectedRound(null);
+        }}
+        onVehicleSelected={handleVehicleSelected}
+      />
+
       {/* Odometer Dialog */}
-      {selectedRound && (
-        <OdometerDialog
-          open={showOdometerDialog}
-          onClose={() => {
-            setShowOdometerDialog(false);
-            setSelectedRound(null);
-          }}
-          onComplete={handleOdometerComplete}
-          vehiclePlate={selectedRound.vehicles?.license_plate || "N/A"}
-          roundId={selectedRound.id}
-          vehicleId={selectedRound.vehicle_id}
-        />
-      )}
+      <OdometerDialog
+        open={showOdometerDialog}
+        onClose={() => {
+          setShowOdometerDialog(false);
+          setSelectedRound(null);
+          setSelectedVehicleData(null);
+        }}
+        onComplete={handleOdometerComplete}
+        vehiclePlate={selectedVehicleData?.vehiclePlate || 'N/A'}
+        roundId={selectedRound?.id}
+        vehicleId={selectedVehicleData?.vehicleId || undefined}
+      />
     </div>
   );
 };
