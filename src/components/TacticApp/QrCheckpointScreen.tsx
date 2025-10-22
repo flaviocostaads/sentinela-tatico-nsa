@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import SignaturePad from "./SignaturePad";
 import RealTimeRoundMap from "./RealTimeRoundMap";
-import SimpleCameraScanner from "./SimpleCameraScanner";
+import QrScannerV2 from "./QrScannerV2";
 import { ArrowLeft, Camera, AlertTriangle, MapPin, CheckCircle } from "lucide-react";
 
 interface QrCheckpointScreenProps {
@@ -953,7 +953,7 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
       </div>
 
       {/* QR Scanner Modal */}
-      <SimpleCameraScanner
+      <QrScannerV2
         open={showQrScanner}
         onClose={() => setShowQrScanner(false)}
         onScan={handleQrScan}
