@@ -188,7 +188,7 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
           user_id: user.id,
           start_time: new Date().toISOString(),
           vehicle_id: null,
-          vehicle: 'on_foot',
+          vehicle: 'on_foot' as any, // Type will be updated after database migration
           initial_odometer: null,
         })
         .eq('id', selectedRound.id);
@@ -228,7 +228,7 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
           start_time: new Date().toISOString(),
           initial_odometer: odometer,
           vehicle_id: selectedVehicleData.vehicleId,
-          vehicle: selectedVehicleData.vehicleType,
+          vehicle: selectedVehicleData.vehicleType as any, // Type will be updated after database migration
         })
         .eq('id', selectedRound.id);
 

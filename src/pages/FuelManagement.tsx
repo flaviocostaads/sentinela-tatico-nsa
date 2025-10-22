@@ -37,7 +37,7 @@ interface FuelLog {
     license_plate: string;
     brand: string;
     model: string;
-    type: 'car' | 'motorcycle';
+    type: 'car' | 'motorcycle' | 'on_foot';
   };
   profiles?: {
     name: string;
@@ -49,7 +49,7 @@ interface Vehicle {
   license_plate: string;
   brand: string;
   model: string;
-  type: 'car' | 'motorcycle';
+  type: 'car' | 'motorcycle' | 'on_foot';
   current_odometer: number;
   fuel_capacity?: number;
 }

@@ -25,7 +25,7 @@ interface UserLocation {
   };
   rounds?: {
     id: string;
-    vehicle: 'car' | 'motorcycle';
+    vehicle: 'car' | 'motorcycle' | 'on_foot';
     template_id?: string;
   };
 }

@@ -1185,7 +1185,7 @@ export type Database = {
       incident_type: "security" | "maintenance" | "emergency" | "other"
       round_status: "pending" | "active" | "completed" | "incident"
       user_role: "admin" | "operador" | "tatico"
-      vehicle_type: "car" | "motorcycle"
+      vehicle_type: "car" | "motorcycle" | "on_foot"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1319,7 +1319,7 @@ export const Constants = {
       incident_type: ["security", "maintenance", "emergency", "other"],
       round_status: ["pending", "active", "completed", "incident"],
       user_role: ["admin", "operador", "tatico"],
-      vehicle_type: ["car", "motorcycle"],
+      vehicle_type: ["car", "motorcycle", "on_foot"],
     },
   },
 } as const

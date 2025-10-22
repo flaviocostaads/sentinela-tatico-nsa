@@ -19,7 +19,7 @@ interface Vehicle {
   brand: string;
   model: string;
   year: number;
-  type: 'car' | 'motorcycle';
+  type: 'car' | 'motorcycle' | 'on_foot';
   initial_odometer: number;
   current_odometer: number;
   fuel_capacity?: number;

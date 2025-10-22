@@ -20,7 +20,7 @@ interface Round {
   client_id: string;
   user_id: string;
   vehicle_id?: string;
-  vehicle: 'car' | 'motorcycle';
+  vehicle: 'car' | 'motorcycle' | 'on_foot';
   status: 'pending' | 'active' | 'completed' | 'incident';
   start_time?: string;
   end_time?: string;

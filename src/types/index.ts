@@ -44,7 +44,7 @@ export interface Round {
   tacticName: string;
   clientId: string;
   clientName: string;
-  vehicle: 'car' | 'motorcycle';
+  vehicle: 'car' | 'motorcycle' | 'on_foot';
   status: 'pending' | 'active' | 'completed' | 'incident';
   startTime?: string;
   endTime?: string;

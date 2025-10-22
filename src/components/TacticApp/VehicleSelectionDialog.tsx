@@ -18,7 +18,7 @@ interface Vehicle {
   license_plate: string;
   brand: string;
   model: string;
-  type: 'car' | 'motorcycle';
+  type: 'car' | 'motorcycle' | 'on_foot';
 }
 
 const VehicleSelectionDialog = ({ open, onClose, onVehicleSelected }: VehicleSelectionDialogProps) => {
@@ -57,7 +57,7 @@ const VehicleSelectionDialog = ({ open, onClose, onVehicleSelected }: VehicleSel
     }
   };
 
-  const getVehicleIcon = (type: 'car' | 'motorcycle') => {
+  const getVehicleIcon = (type: 'car' | 'motorcycle' | 'on_foot') => {
     switch (type) {
       case 'car':
         return <Car className="w-4 h-4" />;
