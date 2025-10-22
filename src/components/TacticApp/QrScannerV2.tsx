@@ -102,22 +102,47 @@ const QrScannerV2 = ({
         throw new Error("BROWSER_NOT_SUPPORTED");
       }
 
-      // Check video element
+      // Wait for DOM to be ready and check video element with retry
+      let retries = 3;
+      while (!videoRef.current && retries > 0) {
+        console.log(`⏳ Waiting for video element... (${retries} retries left)`);
+        await new Promise(resolve => setTimeout(resolve, 100));
+        retries--;
+      }
+
       if (!videoRef.current) {
-        console.error("❌ Video element not found");
+        console.error("❌ Video element not found after retries");
         throw new Error("VIDEO_ELEMENT_NOT_FOUND");
       }
 
       console.log("✅ Video element found, requesting camera access...");
 
-      // Request camera with simple constraints
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
-      });
+      // Request camera with progressive constraints
+      let stream: MediaStream;
+      
+      try {
+        // Try with environment camera first
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            facingMode: { exact: "environment" },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+        console.log("✅ Environment camera obtained");
+      } catch (envError) {
+        console.log("⚠️ Environment camera not available, trying any camera...");
+        // Fallback to any camera
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: false
+        });
+        console.log("✅ Front/any camera obtained");
+      }
 
       console.log("✅ Camera stream obtained:", {
         active: stream.active,
@@ -132,38 +157,63 @@ const QrScannerV2 = ({
 
       streamRef.current = stream;
       
-      // Attach stream to video
+      // Attach stream to video with retry mechanism
       const video = videoRef.current;
       if (!video) {
+        stream.getTracks().forEach(track => track.stop());
         throw new Error("VIDEO_ELEMENT_LOST");
       }
 
       video.srcObject = stream;
+      video.muted = true;
+      video.playsInline = true;
+      video.autoplay = true;
       
       console.log("🎥 Waiting for video to load...");
 
-      // Wait for video to be ready
+      // Wait for video to be ready with better error handling
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
+          console.error("⏰ Video load timeout");
           reject(new Error("VIDEO_LOAD_TIMEOUT"));
-        }, 5000);
+        }, 8000); // Increased timeout
+
+        const cleanup = () => {
+          clearTimeout(timeout);
+          video.removeEventListener('loadedmetadata', onLoadedMetadata);
+          video.removeEventListener('error', onError);
+        };
 
         const onLoadedMetadata = () => {
-          console.log("📺 Video metadata loaded");
+          console.log("📺 Video metadata loaded, dimensions:", video.videoWidth, "x", video.videoHeight);
+          
           video.play()
             .then(() => {
-              console.log("▶️ Video playing");
-              clearTimeout(timeout);
+              console.log("▶️ Video playing successfully");
+              cleanup();
               resolve();
             })
             .catch((err) => {
               console.error("❌ Play failed:", err);
-              clearTimeout(timeout);
-              reject(err);
+              cleanup();
+              reject(new Error("VIDEO_PLAY_FAILED"));
             });
         };
 
+        const onError = (err: Event) => {
+          console.error("❌ Video error:", err);
+          cleanup();
+          reject(new Error("VIDEO_LOAD_ERROR"));
+        };
+
         video.addEventListener('loadedmetadata', onLoadedMetadata, { once: true });
+        video.addEventListener('error', onError, { once: true });
+
+        // Trigger load if needed
+        if (video.readyState >= 2) {
+          console.log("📺 Video already loaded, playing immediately");
+          onLoadedMetadata();
+        }
       });
 
       if (!mountedRef.current) return;
@@ -188,9 +238,13 @@ const QrScannerV2 = ({
       } else if (err.message === 'BROWSER_NOT_SUPPORTED') {
         errorMessage = "Navegador não suporta acesso à câmera.";
       } else if (err.message === 'VIDEO_ELEMENT_NOT_FOUND' || err.message === 'VIDEO_ELEMENT_LOST') {
-        errorMessage = "Erro ao carregar componente de vídeo. Tente novamente.";
+        errorMessage = "Erro ao carregar componente de vídeo. Tente fechar e abrir novamente.";
       } else if (err.message === 'VIDEO_LOAD_TIMEOUT') {
-        errorMessage = "Tempo esgotado ao carregar câmera.";
+        errorMessage = "Tempo esgotado ao carregar câmera. Verifique as permissões.";
+      } else if (err.message === 'VIDEO_PLAY_FAILED') {
+        errorMessage = "Erro ao iniciar reprodução do vídeo. Tente novamente.";
+      } else if (err.message === 'VIDEO_LOAD_ERROR') {
+        errorMessage = "Erro ao carregar stream de vídeo. Reinicie o navegador.";
       }
       
       setError(errorMessage);

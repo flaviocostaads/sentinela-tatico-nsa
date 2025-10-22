@@ -224,32 +224,50 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
       const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
       if (!selectedVehicle) throw new Error("Veículo não encontrado");
 
-      // Get template info to validate it has checkpoints
+      // Get template and checkpoints info
+      console.log("Fetching template and checkpoints for:", formData.template_id);
+      
       const { data: templateData, error: templateError } = await supabase
         .from("round_templates")
         .select(`
           id,
           name,
-          round_template_checkpoints (
-            id,
-            client_id
-          )
+          shift_type
         `)
         .eq("id", formData.template_id)
         .single();
 
-      if (templateError) throw templateError;
-
-      if (!templateData?.round_template_checkpoints || templateData.round_template_checkpoints.length === 0) {
-        throw new Error("Template sem checkpoints configurados");
+      if (templateError) {
+        console.error("Template fetch error:", templateError);
+        throw templateError;
       }
 
-      console.log("Template data for round creation:", templateData);
+      console.log("Template data:", templateData);
+
+      // Fetch checkpoints separately to avoid RLS issues
+      const { data: checkpoints, error: checkpointsError } = await supabase
+        .from("round_template_checkpoints")
+        .select("id, client_id, order_index")
+        .eq("template_id", formData.template_id)
+        .order("order_index");
+
+      console.log("Checkpoints query result:", { checkpoints, checkpointsError });
+
+      if (checkpointsError) {
+        console.error("Checkpoints fetch error:", checkpointsError);
+        throw new Error("Erro ao buscar checkpoints do template");
+      }
+
+      if (!checkpoints || checkpoints.length === 0) {
+        throw new Error("Template sem checkpoints configurados. Configure checkpoints antes de criar a ronda.");
+      }
+
+      console.log("Template validated with checkpoints:", checkpoints.length);
 
       // Create ONE round using the template (not tied to a specific client)
       const roundData = {
         user_id: selectedTacticUserId,
-        client_id: templateData.round_template_checkpoints[0].client_id, // Use first client as reference
+        client_id: checkpoints[0].client_id, // Use first client as reference
         template_id: formData.template_id,
         vehicle_id: formData.vehicle_id,
         vehicle: selectedVehicle.type,
