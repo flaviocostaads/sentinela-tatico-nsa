@@ -82,6 +82,9 @@ const QrScannerV2 = ({
         throw new Error("BROWSER_NOT_SUPPORTED");
       }
 
+      // Wait a bit for video element to be mounted
+      await new Promise(resolve => setTimeout(resolve, 100));
+
       // Check if video element exists
       if (!videoRef.current) {
         console.error("❌ Video element not available");
@@ -90,36 +93,56 @@ const QrScannerV2 = ({
 
       console.log("✅ Video element ready, requesting camera access...");
 
-      // Request camera access
-      let stream: MediaStream;
+      // Request camera access with multiple fallback strategies
+      let stream: MediaStream | null = null;
       
+      // Strategy 1: Try environment camera (back camera on mobile) without exact
       try {
-        // Try environment camera first (back camera on mobile)
+        console.log("📱 Trying environment camera (back camera)...");
         stream = await navigator.mediaDevices.getUserMedia({
           video: { 
-            facingMode: { exact: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            facingMode: "environment",
+            width: { ideal: 1920, max: 1920 },
+            height: { ideal: 1080, max: 1080 }
           },
           audio: false
         });
         console.log("✅ Environment camera obtained");
       } catch (envError) {
-        console.log("⚠️ Environment camera not available, trying any camera...");
-        // Fallback to any available camera
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          },
-          audio: false
-        });
-        console.log("✅ Any available camera obtained");
+        console.log("⚠️ Environment camera failed:", envError);
+        
+        // Strategy 2: Try with minimal constraints
+        try {
+          console.log("📱 Trying any camera with basic constraints...");
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
+            audio: false
+          });
+          console.log("✅ Camera with basic constraints obtained");
+        } catch (basicError) {
+          console.log("⚠️ Basic constraints failed:", basicError);
+          
+          // Strategy 3: Try with just video: true (most permissive)
+          console.log("📱 Trying with minimal constraints...");
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false
+          });
+          console.log("✅ Camera with minimal constraints obtained");
+        }
+      }
+
+      if (!stream) {
+        throw new Error("NO_STREAM_OBTAINED");
       }
 
       console.log("✅ Camera stream obtained:", {
         active: stream.active,
-        tracks: stream.getTracks().length
+        tracks: stream.getTracks().length,
+        trackSettings: stream.getVideoTracks()[0]?.getSettings()
       });
 
       streamRef.current = stream;
@@ -130,55 +153,57 @@ const QrScannerV2 = ({
         throw new Error("VIDEO_ELEMENT_LOST");
       }
 
+      // Configure video element
       video.srcObject = stream;
+      video.setAttribute('playsinline', 'true');
+      video.setAttribute('autoplay', 'true');
+      video.setAttribute('muted', 'true');
       video.muted = true;
       video.playsInline = true;
-      video.autoplay = true;
       
       console.log("🎥 Waiting for video to be ready...");
 
-      // Wait for video to be ready
+      // Wait for video to be ready with timeout
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
-          console.error("⏰ Video load timeout");
+          console.error("⏰ Video load timeout after 15 seconds");
           reject(new Error("VIDEO_LOAD_TIMEOUT"));
-        }, 10000);
+        }, 15000);
 
-        const onLoadedMetadata = () => {
-          console.log("📺 Video metadata loaded");
+        const onCanPlay = async () => {
+          console.log("📺 Video can play, attempting to start playback...");
           
-          video.play()
-            .then(() => {
-              console.log("▶️ Video playing successfully");
-              clearTimeout(timeout);
-              video.removeEventListener('loadedmetadata', onLoadedMetadata);
-              video.removeEventListener('error', onError);
-              resolve();
-            })
-            .catch((err) => {
-              console.error("❌ Play failed:", err);
-              clearTimeout(timeout);
-              video.removeEventListener('loadedmetadata', onLoadedMetadata);
-              video.removeEventListener('error', onError);
-              reject(new Error("VIDEO_PLAY_FAILED"));
-            });
+          try {
+            await video.play();
+            console.log("▶️ Video playing successfully");
+            clearTimeout(timeout);
+            video.removeEventListener('canplay', onCanPlay);
+            video.removeEventListener('error', onError);
+            resolve();
+          } catch (playErr) {
+            console.error("❌ Play failed:", playErr);
+            clearTimeout(timeout);
+            video.removeEventListener('canplay', onCanPlay);
+            video.removeEventListener('error', onError);
+            reject(new Error("VIDEO_PLAY_FAILED"));
+          }
         };
 
         const onError = (err: Event) => {
-          console.error("❌ Video error:", err);
+          console.error("❌ Video error event:", err);
           clearTimeout(timeout);
-          video.removeEventListener('loadedmetadata', onLoadedMetadata);
+          video.removeEventListener('canplay', onCanPlay);
           video.removeEventListener('error', onError);
           reject(new Error("VIDEO_LOAD_ERROR"));
         };
 
-        video.addEventListener('loadedmetadata', onLoadedMetadata);
-        video.addEventListener('error', onError);
+        video.addEventListener('canplay', onCanPlay, { once: true });
+        video.addEventListener('error', onError, { once: true });
 
-        // If already loaded, trigger immediately
-        if (video.readyState >= 2) {
-          console.log("📺 Video already loaded");
-          onLoadedMetadata();
+        // If video is already ready, trigger immediately
+        if (video.readyState >= video.HAVE_FUTURE_DATA) {
+          console.log("📺 Video already ready, triggering immediately");
+          onCanPlay();
         }
       });
 
@@ -188,6 +213,11 @@ const QrScannerV2 = ({
 
     } catch (err: any) {
       console.error("💥 Camera initialization error:", err);
+      console.error("Error details:", {
+        name: err.name,
+        message: err.message,
+        stack: err.stack
+      });
       
       let errorMessage = "Erro ao acessar câmera";
       
@@ -196,17 +226,21 @@ const QrScannerV2 = ({
       } else if (err.name === 'NotFoundError') {
         errorMessage = "Nenhuma câmera encontrada neste dispositivo.";
       } else if (err.name === 'NotReadableError') {
-        errorMessage = "Câmera está sendo usada por outro aplicativo.";
+        errorMessage = "Câmera está sendo usada por outro aplicativo. Feche outros apps e tente novamente.";
+      } else if (err.name === 'OverconstrainedError') {
+        errorMessage = "Configurações de câmera não suportadas. Tentando configuração alternativa...";
       } else if (err.message === 'BROWSER_NOT_SUPPORTED') {
         errorMessage = "Navegador não suporta acesso à câmera.";
       } else if (err.message === 'VIDEO_ELEMENT_NOT_FOUND' || err.message === 'VIDEO_ELEMENT_LOST') {
         errorMessage = "Erro ao carregar componente de vídeo. Feche e abra novamente.";
       } else if (err.message === 'VIDEO_LOAD_TIMEOUT') {
-        errorMessage = "Tempo esgotado ao carregar câmera. Verifique as permissões.";
+        errorMessage = "Tempo esgotado ao carregar câmera. Tente novamente.";
       } else if (err.message === 'VIDEO_PLAY_FAILED') {
-        errorMessage = "Erro ao iniciar vídeo. Tente novamente.";
+        errorMessage = "Erro ao iniciar vídeo. Permita reprodução automática.";
       } else if (err.message === 'VIDEO_LOAD_ERROR') {
         errorMessage = "Erro ao carregar stream de vídeo.";
+      } else if (err.message === 'NO_STREAM_OBTAINED') {
+        errorMessage = "Não foi possível obter stream de câmera.";
       }
       
       setError(errorMessage);
@@ -233,12 +267,16 @@ const QrScannerV2 = ({
       setManualCode("");
       setValidating(false);
       
-      // Small delay to ensure dialog and video element are mounted
+      // Delay to ensure dialog and video element are fully mounted
       const timer = setTimeout(() => {
+        console.log("⏰ Starting camera initialization after mount delay");
         initializeCamera();
-      }, 350);
+      }, 500);
       
-      return () => clearTimeout(timer);
+      return () => {
+        console.log("🧹 Clearing initialization timer");
+        clearTimeout(timer);
+      };
     } else {
       console.log("🛑 QR Scanner closed");
       cleanup();
@@ -477,14 +515,6 @@ const QrScannerV2 = ({
           {/* CAMERA READY STATE */}
           {state === 'camera-ready' && (
             <>
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-80 object-cover"
-              />
-              
               {/* Scanning overlay */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="relative">
@@ -521,22 +551,18 @@ const QrScannerV2 = ({
                   Manual
                 </Button>
               </div>
-
-              {/* Hidden canvas for scanning */}
-              <canvas ref={canvasRef} className="hidden" />
             </>
           )}
 
-          {/* Always render video element to ensure ref is available */}
-          {state !== 'camera-ready' && (
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="hidden"
-            />
-          )}
+          {/* Always render video element and canvas to ensure refs are available */}
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className={state === 'camera-ready' ? "w-full h-80 object-cover" : "hidden"}
+          />
+          <canvas ref={canvasRef} className="hidden" />
         </div>
 
         {state === 'camera-ready' && (
