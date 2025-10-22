@@ -731,7 +731,7 @@ export type Database = {
           template_id: string | null
           updated_at: string
           user_id: string | null
-          vehicle: Database["public"]["Enums"]["vehicle_type"]
+          vehicle: Database["public"]["Enums"]["vehicle_type"] | null
           vehicle_id: string | null
         }
         Insert: {
@@ -754,7 +754,7 @@ export type Database = {
           template_id?: string | null
           updated_at?: string
           user_id?: string | null
-          vehicle: Database["public"]["Enums"]["vehicle_type"]
+          vehicle?: Database["public"]["Enums"]["vehicle_type"] | null
           vehicle_id?: string | null
         }
         Update: {
@@ -777,7 +777,7 @@ export type Database = {
           template_id?: string | null
           updated_at?: string
           user_id?: string | null
-          vehicle?: Database["public"]["Enums"]["vehicle_type"]
+          vehicle?: Database["public"]["Enums"]["vehicle_type"] | null
           vehicle_id?: string | null
         }
         Relationships: [
