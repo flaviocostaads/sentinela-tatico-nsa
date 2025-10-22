@@ -1100,10 +1100,7 @@ export type Database = {
         Args: { user_uuid: string }
         Returns: boolean
       }
-      check_admin_role: {
-        Args: { user_uuid: string }
-        Returns: boolean
-      }
+      check_admin_role: { Args: { user_uuid: string }; Returns: boolean }
       delete_incident_with_audit: {
         Args: {
           p_admin_name: string
