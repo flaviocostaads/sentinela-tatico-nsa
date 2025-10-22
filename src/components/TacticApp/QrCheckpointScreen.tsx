@@ -368,16 +368,27 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
 
     try {
       // Strategy 1: Try to parse as JSON first (for our generated QR codes)
-      let qrCheckpointId: string | null = null;
+      let qrIdentifier: string | null = null;
       let qrData: any = null;
       
       try {
         qrData = JSON.parse(cleanedData);
         console.log("📋 Parsed QR JSON:", qrData);
         
-        if (qrData.type === 'checkpoint' && qrData.checkpointId) {
-          qrCheckpointId = qrData.checkpointId;
-          console.log("✅ Found checkpoint ID in JSON:", qrCheckpointId);
+        // Check for manualCode in the JSON (our generated QR codes have this)
+        if (qrData.type === 'checkpoint' && qrData.manualCode) {
+          qrIdentifier = qrData.manualCode;
+          console.log("✅ Found manualCode in JSON:", qrIdentifier);
+        }
+        // Fallback to checkpointId if present
+        else if (qrData.checkpointId) {
+          qrIdentifier = qrData.checkpointId;
+          console.log("✅ Found checkpointId in JSON:", qrIdentifier);
+        }
+        // If JSON was parsed but no identifier found, try using the whole JSON as string
+        else {
+          qrIdentifier = cleanedData;
+          console.log("⚠️ JSON parsed but no identifier found, using full data");
         }
       } catch (jsonError) {
         console.log("ℹ️ Not JSON format, trying other strategies...");
@@ -385,35 +396,19 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
         // Strategy 2: Check if it's a 9-digit manual code
         if (/^\d{9}$/.test(cleanedData)) {
           console.log("🔢 9-digit manual code detected:", cleanedData);
-          
-          // Validate manual code against current checkpoint's client
-          const isValid = await validateQrCodeForCheckpoint(cleanedData, checkpointId);
-          
-          if (isValid) {
-            setQrScanned(true);
-            toast({
-              title: "✅ QR Code Válido",
-              description: "Checkpoint confirmado! Preencha a atividade.",
-            });
-          } else {
-            toast({
-              title: "❌ QR Code Inválido",
-              description: "Este QR code não pertence a este checkpoint. Escaneie o QR code correto.",
-              variant: "destructive",
-            });
-          }
-          return;
+          qrIdentifier = cleanedData;
         }
-        
-        // Strategy 3: Try using the raw data as QR code/manual code string
-        qrCheckpointId = cleanedData;
-        console.log("🔍 Using raw cleaned data as identifier:", qrCheckpointId);
+        // Strategy 3: Try using the raw data as identifier
+        else {
+          qrIdentifier = cleanedData;
+          console.log("🔍 Using raw cleaned data as identifier:", qrIdentifier);
+        }
       }
 
       // Validate the QR code against the expected checkpoint's client
-      if (qrCheckpointId) {
-        console.log("🔍 Validating identifier:", qrCheckpointId);
-        const isValid = await validateQrCodeForCheckpoint(qrCheckpointId, checkpointId);
+      if (qrIdentifier) {
+        console.log("🔍 Validating identifier:", qrIdentifier);
+        const isValid = await validateQrCodeForCheckpoint(qrIdentifier, checkpointId);
         
         if (isValid) {
           setQrScanned(true);
