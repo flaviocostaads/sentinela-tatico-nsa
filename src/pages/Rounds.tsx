@@ -69,8 +69,7 @@ const Rounds = () => {
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [formData, setFormData] = useState({
-    template_id: "",
-    vehicle_id: ""
+    template_id: ""
   });
   const [editingRound, setEditingRound] = useState<Round | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -193,10 +192,10 @@ const Rounds = () => {
   const handleNewRound = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.template_id || !formData.vehicle_id) {
+    if (!formData.template_id) {
       toast({
         title: "Erro",
-        description: "Preencha todos os campos obrigatórios",
+        description: "Selecione um template de ronda",
         variant: "destructive",
       });
       return;
@@ -204,18 +203,26 @@ const Rounds = () => {
 
     try {
       const selectedTemplate = templates.find(t => t.id === formData.template_id);
-      const selectedVehicle = vehicles.find(v => v.id === formData.vehicle_id);
       
       if (!selectedTemplate) {
         throw new Error("Template não encontrado");
       }
 
-      // Criar ronda sem user_id - disponível para todos os táticos
+      if (!selectedTemplate.round_template_checkpoints || selectedTemplate.round_template_checkpoints.length === 0) {
+        toast({
+          title: "Erro",
+          description: "Template sem checkpoints configurados. Configure checkpoints antes de criar a ronda.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Criar ronda sem user_id e sem veículo - disponível para todos os táticos
       const roundData = {
         template_id: formData.template_id,
         user_id: null, // NULL = disponível para qualquer tático
-        vehicle_id: formData.vehicle_id,
-        vehicle: selectedVehicle?.type || 'car' as 'car' | 'motorcycle',
+        vehicle_id: null, // Será escolhido pelo tático ao iniciar
+        vehicle: null as any, // Será definido ao iniciar a ronda
         status: 'pending' as const,
         round_number: 1,
         client_id: selectedTemplate.round_template_checkpoints[0]?.client_id,
@@ -235,13 +242,13 @@ const Rounds = () => {
       });
 
       setCreateRoundDialogOpen(false);
-      setFormData({ template_id: "", vehicle_id: "" });
+      setFormData({ template_id: "" });
       fetchRounds();
     } catch (error) {
       console.error("Error creating rounds:", error);
       toast({
         title: "Erro",
-        description: "Erro ao criar rondas",
+        description: error instanceof Error ? error.message : "Erro ao criar rondas",
         variant: "destructive",
       });
     }
@@ -494,28 +501,15 @@ const Rounds = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="vehicle">Veículo</Label>
-                      <Select value={formData.vehicle_id} onValueChange={(value) => setFormData({ ...formData, vehicle_id: value })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione um veículo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {vehicles.map((vehicle) => (
-                            <SelectItem key={vehicle.id} value={vehicle.id}>
-                              {vehicle.license_plate} - {vehicle.brand} {vehicle.model}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    
                     <div className="text-sm text-muted-foreground p-3 bg-muted rounded-md">
-                      <p>💡 <strong>Atenção:</strong> Esta ronda ficará disponível para <strong>todos os táticos</strong>. O tático que iniciar a ronda será automaticamente atribuído a ela.</p>
+                      <p>💡 <strong>Atenção:</strong> Esta ronda ficará disponível para <strong>todos os táticos</strong>. O tático escolherá o veículo ao iniciar a ronda.</p>
                     </div>
+                    
                     <Button 
                       type="submit" 
                       className="w-full bg-tactical-green hover:bg-tactical-green/90"
-                      disabled={!formData.template_id || !formData.vehicle_id}
+                      disabled={!formData.template_id}
                     >
                       Criar Ronda
                     </Button>
