@@ -437,7 +437,7 @@ const History = () => {
                 onClick={() => handleRoundClick(round)}
               >
                 <CardContent className="p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
+                  <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-center">
                     <div className="space-y-1">
                       <p className="font-medium">{round.clients.name}</p>
                       <p className="text-sm text-muted-foreground">{round.profiles.name}</p>
@@ -456,13 +456,13 @@ const History = () => {
                     <div className="text-sm text-muted-foreground">
                       {round.vehicle === 'car' ? 'Carro' : 'Moto'}
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-2">
-                        <MapPin className="w-4 h-4 text-muted-foreground" />
-                        <span className="text-sm text-muted-foreground truncate">
-                          {round.clients.address}
-                        </span>
-                      </div>
+                    <div className="flex items-center space-x-2">
+                      <MapPin className="w-4 h-4 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground truncate">
+                        {round.clients.address.split(',')[0]}
+                      </span>
+                    </div>
+                    <div className="flex justify-end">
                       {profile?.role === 'admin' && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>

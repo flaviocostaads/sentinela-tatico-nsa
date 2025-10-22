@@ -446,64 +446,58 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
         clientName: checkpoint?.clients?.name
       });
 
-      // Search for checkpoint by QR code
-      const { data: checkpointByQr, error: qrError } = await supabase
-        .from("checkpoints")
-        .select("id, name, qr_code, client_id, clients(name)")
-        .eq("qr_code", qrCode)
-        .eq("active", true)
-        .maybeSingle();
-
-      if (qrError && qrError.code !== 'PGRST116') {
-        console.error("❌ Database error (qr_code):", qrError);
+      // First, get the current checkpoint's client_id
+      let currentClientId = checkpoint?.clients?.id;
+      
+      // If we don't have client_id yet, try to get it from the checkpoint name
+      if (!currentClientId && checkpoint?.clients?.name) {
+        console.log("⚠️ No client_id in checkpoint, fetching by name:", checkpoint.clients.name);
+        const { data: clientData } = await supabase
+          .from("clients")
+          .select("id")
+          .eq("name", checkpoint.clients.name)
+          .maybeSingle();
+        
+        if (clientData?.id) {
+          currentClientId = clientData.id;
+          console.log("✅ Found client_id:", currentClientId);
+        }
       }
 
-      // Search for checkpoint by manual code
-      const { data: checkpointByManual, error: manualError } = await supabase
-        .from("checkpoints")
-        .select("id, name, manual_code, client_id, clients(name)")
-        .eq("manual_code", qrCode)
-        .eq("active", true)
-        .maybeSingle();
-
-      if (manualError && manualError.code !== 'PGRST116') {
-        console.error("❌ Database error (manual_code):", manualError);
-      }
-
-      const foundCheckpoint = checkpointByQr || checkpointByManual;
-
-      if (!foundCheckpoint) {
-        console.log("❌ No checkpoint found with this QR/manual code in database");
+      if (!currentClientId) {
+        console.log("❌ Cannot validate: current checkpoint has no client_id");
         return false;
       }
 
-      console.log("✅ Found checkpoint by QR/manual code:", {
-        id: foundCheckpoint.id,
-        name: foundCheckpoint.name,
-        clientId: foundCheckpoint.client_id
-      });
+      // Search for checkpoint by QR code OR manual code that belongs to the same client
+      const { data: foundCheckpoint, error } = await supabase
+        .from("checkpoints")
+        .select("id, name, qr_code, manual_code, client_id, clients(name)")
+        .eq("client_id", currentClientId)
+        .eq("active", true)
+        .or(`qr_code.eq.${qrCode},manual_code.eq.${qrCode}`)
+        .maybeSingle();
 
-      // Validation logic:
-      // If the scanned checkpoint belongs to the same client as the current checkpoint, it's valid
-      if (checkpoint?.clients?.id && foundCheckpoint.client_id === checkpoint.clients.id) {
-        console.log("✅ VALID: QR code belongs to same client");
-        console.log("🔍 Match details:", {
-          scannedClientId: foundCheckpoint.client_id,
-          expectedClientId: checkpoint.clients.id,
-          clientName: checkpoint.clients.name
-        });
-        return true;
+      if (error && error.code !== 'PGRST116') {
+        console.error("❌ Database error:", error);
+        return false;
       }
 
-      console.log("❌ INVALID: QR code belongs to different client");
-      console.log("🔍 Mismatch details:", {
-        scannedClientId: foundCheckpoint.client_id,
-        scannedClientName: foundCheckpoint.clients?.name,
-        expectedClientId: checkpoint?.clients?.id,
-        expectedClientName: checkpoint?.clients?.name
+      if (!foundCheckpoint) {
+        console.log("❌ No checkpoint found with this QR/manual code for the current client");
+        console.log("🔍 Searched in client_id:", currentClientId);
+        return false;
+      }
+
+      console.log("✅ VALID: QR code belongs to correct client");
+      console.log("🔍 Match details:", {
+        scannedCheckpointId: foundCheckpoint.id,
+        scannedCheckpointName: foundCheckpoint.name,
+        clientId: foundCheckpoint.client_id,
+        clientName: foundCheckpoint.clients?.name
       });
       
-      return false;
+      return true;
 
     } catch (error) {
       console.error("💥 Exception in validateQrCodeForCheckpoint:", error);
