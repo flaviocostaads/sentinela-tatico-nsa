@@ -351,93 +351,82 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
     }
   };
 
-  const handleQrScan = (scannedData: string) => {
-    console.log("=== QR Code Scan Handler ===");
-    console.log("Scanned data:", scannedData);
-    console.log("Expected company:", checkpoint?.clients?.name);
-    console.log("Current checkpoint:", checkpoint);
+  const handleQrScan = async (scannedData: string) => {
+    console.log("🔐 === SECURE QR Code Validation ===");
+    console.log("📱 Scanned data:", scannedData);
+    console.log("🎯 Current checkpoint ID:", checkpointId);
+    console.log("🏢 Expected client:", checkpoint?.clients?.name);
     
     setShowQrScanner(false);
 
     try {
-      let isValidQr = false;
-      let validationDetails = "";
-
       // Try to parse as JSON first
+      let qrCheckpointId: string | null = null;
+      let qrData: any = null;
+      
       try {
-        const qrJson = JSON.parse(scannedData);
-        console.log("Parsed QR JSON:", qrJson);
+        qrData = JSON.parse(scannedData);
+        console.log("📋 Parsed QR JSON:", qrData);
         
-        if (qrJson.type === 'checkpoint') {
-          // JSON QR code validation
-          const companyMatch = checkpoint?.clients?.name && (
-            qrJson.company === checkpoint.clients.name ||
-            qrJson.company.toLowerCase().includes(checkpoint.clients.name.toLowerCase()) ||
-            checkpoint.clients.name.toLowerCase().includes(qrJson.company.toLowerCase())
-          );
-          
-          if (companyMatch) {
-            isValidQr = true;
-            validationDetails = `QR JSON válido - Empresa: ${qrJson.company}`;
-          } else {
-            validationDetails = `QR JSON mas empresa não confere: ${qrJson.company} vs ${checkpoint?.clients?.name}`;
-          }
+        if (qrData.type === 'checkpoint' && qrData.checkpointId) {
+          qrCheckpointId = qrData.checkpointId;
+          console.log("✅ Found checkpoint ID in JSON:", qrCheckpointId);
         }
       } catch (jsonError) {
         // Not JSON, check if it's a 9-digit manual code
         if (/^\d{9}$/.test(scannedData)) {
-          console.log("9-digit manual code detected:", scannedData);
+          console.log("🔢 9-digit manual code detected:", scannedData);
           
-          // Search for this manual code in database
-          validateManualCode(scannedData).then(isValid => {
-            if (isValid) {
-              setQrScanned(true);
-              toast({
-                title: "QR Code válido",
-                description: `Código manual ${scannedData} validado com sucesso!`,
-              });
-            } else {
-              toast({
-                title: "Código inválido",
-                description: `Código manual ${scannedData} não encontrado no sistema`,
-                variant: "destructive",
-              });
-            }
-          });
+          // Validate manual code against current checkpoint
+          const isValid = await validateQrCodeForCheckpoint(scannedData, checkpointId);
+          
+          if (isValid) {
+            setQrScanned(true);
+            toast({
+              title: "✅ QR Code Válido",
+              description: "Checkpoint confirmado! Preencha a atividade.",
+            });
+          } else {
+            toast({
+              title: "❌ QR Code Inválido",
+              description: "Este QR code não pertence a este checkpoint. Escaneie o QR code correto.",
+              variant: "destructive",
+            });
+          }
           return;
+        } else {
+          // Try using the raw data as QR code
+          qrCheckpointId = scannedData;
+          console.log("🔍 Using raw data as checkpoint identifier:", qrCheckpointId);
         }
-        
-        validationDetails = `Formato não reconhecido: ${scannedData}`;
       }
 
-      console.log("Validation result:", isValidQr);
-      console.log("Validation details:", validationDetails);
-
-      if (isValidQr) {
-        setQrScanned(true);
-        toast({
-          title: "QR Code válido",
-          description: "Checkpoint confirmado! Preencha a atividade.",
-        });
-      } else {
-        // More flexible validation - allow any QR code for this client's checkpoints
-        if (checkpoint?.clients?.name) {
-          console.log("Trying flexible validation for client:", checkpoint.clients.name);
+      // Validate the QR code against the expected checkpoint
+      if (qrCheckpointId) {
+        const isValid = await validateQrCodeForCheckpoint(qrCheckpointId, checkpointId);
+        
+        if (isValid) {
           setQrScanned(true);
           toast({
-            title: "QR Code aceito",
-            description: `Código aceito para ${checkpoint.clients.name}. Preencha a atividade.`,
+            title: "✅ QR Code Válido",
+            description: "Checkpoint confirmado! Preencha a atividade.",
           });
         } else {
           toast({
-            title: "QR Code inválido",
-            description: validationDetails,
+            title: "❌ QR Code Inválido",
+            description: "Este QR code não pertence a este checkpoint. Escaneie o QR code correto.",
             variant: "destructive",
           });
         }
+      } else {
+        toast({
+          title: "❌ QR Code Inválido",
+          description: "Formato de QR code não reconhecido.",
+          variant: "destructive",
+        });
       }
     } catch (error) {
-      console.error("Error processing QR scan:", error);
+      console.error("💥 Error processing QR scan:", error);
       toast({
         title: "Erro no processamento",
         description: "Erro ao processar QR code. Tente novamente.",
@@ -446,58 +435,95 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
     }
   };
 
-  const validateManualCode = async (code: string): Promise<boolean> => {
+  const validateQrCodeForCheckpoint = async (qrCode: string, expectedCheckpointId: string): Promise<boolean> => {
     try {
-      console.log("🔍 === Manual Code Validation in QrCheckpointScreen ===");
-      console.log("🔢 Input code:", code);
-      console.log("📏 Code length:", code.length);
+      console.log("🔐 === Validating QR Code Against Checkpoint ===");
+      console.log("📱 QR Code:", qrCode);
+      console.log("🎯 Expected Checkpoint ID:", expectedCheckpointId);
       
-      // Ensure code is a string and trim it
-      const cleanCode = String(code).trim();
-      console.log("🧹 Cleaned code:", cleanCode);
+      // Clean the checkpoint ID (remove 'template_' prefix if present)
+      const cleanExpectedId = expectedCheckpointId.startsWith('template_') 
+        ? expectedCheckpointId.replace('template_', '') 
+        : expectedCheckpointId;
       
-      // Check format
-      if (!/^\d{9}$/.test(cleanCode)) {
-        console.log("❌ Invalid format: not 9 digits");
-        return false;
-      }
+      console.log("🧹 Clean expected ID:", cleanExpectedId);
 
-      // Check if this manual code exists in checkpoints table
-      console.log("🗃️ Searching in database...");
-      const { data: checkpoints, error } = await supabase
+      // Search for checkpoint by QR code
+      const { data: checkpointByQr, error: qrError } = await supabase
         .from("checkpoints")
-        .select("id, name, manual_code, client_id, active")
-        .eq("manual_code", cleanCode)
-        .eq("active", true);
+        .select("id, name, qr_code, client_id, clients(name)")
+        .eq("qr_code", qrCode)
+        .eq("active", true)
+        .maybeSingle();
 
-      console.log("📊 Database response:", { data: checkpoints, error });
+      if (qrError && qrError.code !== 'PGRST116') {
+        console.error("❌ Database error (qr_code):", qrError);
+      }
 
-      if (error) {
-        console.error("💥 Database error:", error);
+      // Search for checkpoint by manual code
+      const { data: checkpointByManual, error: manualError } = await supabase
+        .from("checkpoints")
+        .select("id, name, manual_code, client_id, clients(name)")
+        .eq("manual_code", qrCode)
+        .eq("active", true)
+        .maybeSingle();
+
+      if (manualError && manualError.code !== 'PGRST116') {
+        console.error("❌ Database error (manual_code):", manualError);
+      }
+
+      const foundCheckpoint = checkpointByQr || checkpointByManual;
+
+      if (!foundCheckpoint) {
+        console.log("❌ No checkpoint found with this QR/manual code");
         return false;
       }
 
-      if (checkpoints && checkpoints.length > 0) {
-        console.log("✅ SUCCESS! Code found:", checkpoints[0]);
+      console.log("✅ Found checkpoint:", foundCheckpoint);
+
+      // Get current checkpoint details to compare client_id
+      const { data: currentCheckpoint, error: currentError } = await supabase
+        .from("checkpoints")
+        .select("id, client_id, name")
+        .eq("id", cleanExpectedId)
+        .eq("active", true)
+        .maybeSingle();
+
+      if (currentError && currentError.code !== 'PGRST116') {
+        console.error("❌ Error fetching current checkpoint:", currentError);
+      }
+
+      console.log("📍 Current checkpoint:", currentCheckpoint);
+
+      // Validation logic:
+      // 1. If we found the exact checkpoint ID, accept it
+      if (foundCheckpoint.id === cleanExpectedId) {
+        console.log("✅ VALID: Exact checkpoint ID match");
         return true;
       }
 
-      console.log("❌ Code not found in database");
-      
-      // Debug: show sample codes
-      const { data: samples } = await supabase
-        .from("checkpoints")
-        .select("manual_code")
-        .eq("active", true)
-        .limit(3);
-      console.log("📝 Sample codes in DB:", samples);
+      // 2. If both checkpoints belong to the same client, accept it
+      if (currentCheckpoint && foundCheckpoint.client_id === currentCheckpoint.client_id) {
+        console.log("✅ VALID: Same client - allowing checkpoint from same location");
+        return true;
+      }
+
+      console.log("❌ INVALID: Checkpoint does not match");
+      console.log("🔍 Comparison:", {
+        foundId: foundCheckpoint.id,
+        expectedId: cleanExpectedId,
+        foundClientId: foundCheckpoint.client_id,
+        expectedClientId: currentCheckpoint?.client_id
+      });
       
       return false;
+
     } catch (error) {
-      console.error("💥 Exception in validateManualCode:", error);
+      console.error("💥 Exception in validateQrCodeForCheckpoint:", error);
       return false;
     }
   };
+
 
   const canComplete = () => {
     if (!qrScanned) return false;

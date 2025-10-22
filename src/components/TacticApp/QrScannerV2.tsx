@@ -482,34 +482,18 @@ const QrScannerV2 = ({
     onClose();
   };
 
-  const validateManualCode = async (code: string): Promise<boolean> => {
+  const validateManualCode = (code: string): boolean => {
     const cleanCode = code.trim();
-    console.log("🔍 Validating manual code:", cleanCode);
+    console.log("🔍 Checking manual code format:", cleanCode);
 
-    try {
-      const { data, error } = await supabase
-        .from("checkpoints")
-        .select("id, name, manual_code")
-        .eq("manual_code", cleanCode)
-        .eq("active", true)
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error("Database error:", error);
-        return false;
-      }
-
-      if (data) {
-        console.log("✅ Valid code found:", data);
-        return true;
-      }
-
-      console.log("❌ Code not found in database");
-      return false;
-    } catch (error) {
-      console.error("Validation error:", error);
+    // Only validate format - actual validation happens in parent component
+    if (!/^\d{9}$/.test(cleanCode)) {
+      console.log("❌ Invalid format: must be 9 digits");
       return false;
     }
+
+    console.log("✅ Format valid: 9 digits");
+    return true;
   };
 
   const handleManualSubmit = async () => {
@@ -525,11 +509,11 @@ const QrScannerV2 = ({
     setValidating(true);
 
     try {
-      const isValid = await validateManualCode(manualCode);
+      const isValid = validateManualCode(manualCode);
       
       if (isValid) {
         toast({
-          title: "Código válido",
+          title: "Código detectado",
           description: "Processando checkpoint...",
         });
         cleanup();
@@ -537,15 +521,15 @@ const QrScannerV2 = ({
         onClose();
       } else {
         toast({
-          title: "Código não encontrado",
-          description: "Verifique o código e tente novamente",
+          title: "Formato inválido",
+          description: "O código deve ter 9 dígitos",
           variant: "destructive",
         });
       }
     } catch (error) {
       toast({
         title: "Erro de validação",
-        description: "Não foi possível validar o código",
+        description: "Não foi possível processar o código",
         variant: "destructive",
       });
     } finally {
