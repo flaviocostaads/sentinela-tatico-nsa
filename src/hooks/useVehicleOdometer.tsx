@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface LastOdometerData {
@@ -22,7 +22,7 @@ export const useVehicleOdometer = (vehicleId: string | undefined) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchLastOdometer = async () => {
+  const fetchLastOdometer = useCallback(async () => {
     if (!vehicleId) return;
     
     setLoading(true);
@@ -46,7 +46,7 @@ export const useVehicleOdometer = (vehicleId: string | undefined) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [vehicleId]);
 
   const validateOdometer = async (newKm: number): Promise<ValidationResult> => {
     if (!vehicleId) {
@@ -83,7 +83,7 @@ export const useVehicleOdometer = (vehicleId: string | undefined) => {
 
   useEffect(() => {
     fetchLastOdometer();
-  }, [vehicleId]);
+  }, [fetchLastOdometer]);
 
   return {
     lastOdometer,

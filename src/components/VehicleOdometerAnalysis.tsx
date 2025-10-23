@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -37,11 +37,7 @@ export const VehicleOdometerAnalysis = ({ vehicleId }: OdometerAnalysisProps) =>
   const [loading, setLoading] = useState(true);
   const [expandedRecord, setExpandedRecord] = useState<number | null>(null);
 
-  useEffect(() => {
-    fetchOdometerHistory();
-  }, [vehicleId]);
-
-  const fetchOdometerHistory = async () => {
+  const fetchOdometerHistory = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('vehicle_odometer_history')
@@ -57,7 +53,11 @@ export const VehicleOdometerAnalysis = ({ vehicleId }: OdometerAnalysisProps) =>
     } finally {
       setLoading(false);
     }
-  };
+  }, [vehicleId]);
+
+  useEffect(() => {
+    fetchOdometerHistory();
+  }, [fetchOdometerHistory]);
 
   const getSourceIcon = (source: string) => {
     if (source.includes('abastecimento')) return Fuel;
