@@ -23,6 +23,7 @@ interface Checkpoint {
   name: string;
   description?: string;
   order_index: number;
+  client_id?: string;
   lat?: number;
   lng?: number;
   geofence_radius?: number;
@@ -30,6 +31,7 @@ interface Checkpoint {
   visit_time?: string;
   visit_duration?: number;
   qr_code?: string;
+  manual_code?: string;
 }
 
 interface Round {
@@ -144,48 +146,59 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
 
         if (templateError) throw templateError;
 
-        // For each template checkpoint, fetch the real checkpoint data from checkpoints table
-        const formattedCheckpoints = await Promise.all(
-          (templateCheckpoints || []).map(async (tc) => {
-            // Try to find the real checkpoint for this client
-            const { data: realCheckpoint } = await supabase
-              .from("checkpoints")
-              .select("id, name, description, lat, lng, geofence_radius, qr_code, manual_code")
-              .eq("client_id", tc.client_id)
-              .eq("active", true)
-              .maybeSingle();
+        // Get all client IDs from template
+        const clientIds = [...new Set((templateCheckpoints || []).map(tc => tc.client_id))];
+        
+        // Fetch ALL checkpoints for ALL clients in the template
+        const { data: allClientCheckpoints, error: checkpointsError } = await supabase
+          .from("checkpoints")
+          .select("id, name, description, client_id, lat, lng, geofence_radius, qr_code, manual_code, order_index")
+          .in("client_id", clientIds)
+          .eq("active", true)
+          .order("order_index");
 
-            // Use real checkpoint data if available, otherwise use template data
-            if (realCheckpoint) {
-              return {
-                id: realCheckpoint.id, // Use real ID
-                name: realCheckpoint.name,
-                description: realCheckpoint.description || `Ronda em ${tc.clients.name}`,
-                order_index: tc.order_index,
+        if (checkpointsError) throw checkpointsError;
+
+        // Build the complete checkpoint list maintaining template order but including all checkpoints per client
+        const formattedCheckpoints: Checkpoint[] = [];
+        let globalOrderIndex = 0;
+        
+        for (const tc of templateCheckpoints || []) {
+          // Get all checkpoints for this client
+          const clientCheckpoints = allClientCheckpoints?.filter(cp => cp.client_id === tc.client_id) || [];
+          
+          if (clientCheckpoints.length > 0) {
+            // Add each checkpoint for this client
+            clientCheckpoints.forEach((checkpoint) => {
+              formattedCheckpoints.push({
+                id: checkpoint.id,
+                name: checkpoint.name,
+                description: checkpoint.description || `Ronda em ${tc.clients.name}`,
+                order_index: globalOrderIndex++,
                 client_id: tc.client_id,
-                lat: realCheckpoint.lat,
-                lng: realCheckpoint.lng,
-                geofence_radius: realCheckpoint.geofence_radius || 50,
-                qr_code: realCheckpoint.qr_code,
-                manual_code: realCheckpoint.manual_code
-              };
-            } else {
-              // Fallback to template data
-              return {
-                id: `template_${tc.id}`,
-                name: tc.clients.name,
-                description: `Ronda em ${tc.clients.name}`,
-                order_index: tc.order_index,
-                client_id: tc.client_id,
-                lat: null,
-                lng: null,
-                geofence_radius: 50,
-                qr_code: `client_${tc.client_id}`,
-                manual_code: null
-              };
-            }
-          })
-        );
+                lat: checkpoint.lat,
+                lng: checkpoint.lng,
+                geofence_radius: checkpoint.geofence_radius || 50,
+                qr_code: checkpoint.qr_code,
+                manual_code: checkpoint.manual_code
+              });
+            });
+          } else {
+            // Fallback if no checkpoints found for this client
+            formattedCheckpoints.push({
+              id: `template_${tc.id}`,
+              name: tc.clients.name,
+              description: `Ronda em ${tc.clients.name}`,
+              order_index: globalOrderIndex++,
+              client_id: tc.client_id,
+              lat: null,
+              lng: null,
+              geofence_radius: 50,
+              qr_code: `client_${tc.client_id}`,
+              manual_code: null
+            });
+          }
+        }
 
         // Fetch visits for template-based checkpoints
         const { data: visitsData, error: visitsError } = await supabase
@@ -326,38 +339,8 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
     console.log("QR Code received:", qrCode);
     console.log("Current checkpoint index:", currentCheckpointIndex);
     console.log("Available checkpoints:", checkpoints.length);
+    console.log("Checkpoints:", checkpoints);
     
-    // Validate QR code format first
-    let isValidFormat = false;
-    let validationMessage = "";
-
-    // Try to parse as JSON first (structured QR code)
-    try {
-      const parsed = JSON.parse(qrCode);
-      if (parsed.type === 'checkpoint') {
-        isValidFormat = true;
-        validationMessage = `QR Code estruturado: ${parsed.company || 'N/A'}`;
-      }
-    } catch (e) {
-      // Not JSON, check if it's a 9-digit manual code
-      if (/^\d{9}$/.test(qrCode)) {
-        isValidFormat = true;
-        validationMessage = `Código manual de 9 dígitos: ${qrCode}`;
-      }
-    }
-
-    if (!isValidFormat) {
-      console.log("❌ Invalid QR format:", qrCode);
-      toast({
-        title: "QR Code inválido",
-        description: "Formato não reconhecido. Use um QR code válido ou código de 9 dígitos.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    console.log("✅ QR format valid:", validationMessage);
-
     // Find the current checkpoint to complete
     const currentCheckpoint = checkpoints[currentCheckpointIndex];
     
@@ -381,7 +364,59 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
       return;
     }
 
-    console.log("✅ Proceeding with checkpoint completion:", currentCheckpoint.name);
+    console.log("Current checkpoint to validate:", currentCheckpoint);
+    console.log("Current checkpoint QR code:", currentCheckpoint.qr_code);
+    console.log("Current checkpoint manual code:", currentCheckpoint.manual_code);
+
+    // Validate QR code against current checkpoint
+    let isValidForCheckpoint = false;
+    let validationMessage = "";
+
+    // Try to parse as JSON first (structured QR code)
+    try {
+      const scannedData = JSON.parse(qrCode);
+      const checkpointQrData = currentCheckpoint.qr_code ? JSON.parse(currentCheckpoint.qr_code) : null;
+      
+      console.log("Scanned QR data:", scannedData);
+      console.log("Checkpoint QR data:", checkpointQrData);
+      
+      if (scannedData.type === 'checkpoint' && checkpointQrData) {
+        // Compare manual codes if available
+        if (scannedData.manualCode === checkpointQrData.manualCode) {
+          isValidForCheckpoint = true;
+          validationMessage = `QR Code válido para ${currentCheckpoint.name}`;
+        } else {
+          validationMessage = `QR Code de outro checkpoint (${scannedData.checkpoint || 'Desconhecido'})`;
+        }
+      }
+    } catch (e) {
+      // Not JSON, check if it's a manual code matching the current checkpoint
+      if (/^\d{9}$/.test(qrCode)) {
+        console.log("Manual code scanned:", qrCode);
+        console.log("Expected manual code:", currentCheckpoint.manual_code);
+        
+        if (currentCheckpoint.manual_code === qrCode) {
+          isValidForCheckpoint = true;
+          validationMessage = `Código manual válido para ${currentCheckpoint.name}`;
+        } else {
+          validationMessage = `Código manual não corresponde a ${currentCheckpoint.name}`;
+        }
+      } else {
+        validationMessage = "Formato de QR code não reconhecido";
+      }
+    }
+
+    if (!isValidForCheckpoint) {
+      console.log("❌ QR code does not match current checkpoint");
+      toast({
+        title: "QR Code Inválido",
+        description: `Este QR code não pertence a este checkpoint. ${validationMessage}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    console.log("✅ QR code valid for checkpoint:", validationMessage);
     
     toast({
       title: "QR Code válido",
