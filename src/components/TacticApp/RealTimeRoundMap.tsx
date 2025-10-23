@@ -108,13 +108,30 @@ const RealTimeRoundMap = ({ roundId, onBack }: RealTimeRoundMapProps) => {
         const { data: templateCheckpoints, error: templateError } = await supabase
           .from("round_template_checkpoints")
           .select(`
-            *,
-            clients (id, name, address, lat, lng)
+            id,
+            template_id,
+            client_id,
+            order_index
           `)
           .eq("template_id", round.template_id)
           .order("order_index");
 
         if (templateError) throw templateError;
+
+        // Get all client IDs from template
+        const clientIds = [...new Set(templateCheckpoints?.map(tc => tc.client_id) || [])];
+        
+        // Get ALL individual checkpoints for these clients
+        const { data: allCheckpoints, error: checkpointsError } = await supabase
+          .from("checkpoints")
+          .select("id, client_id, name, lat, lng, order_index")
+          .in("client_id", clientIds)
+          .eq("active", true)
+          .order("client_id, order_index");
+
+        if (checkpointsError) throw checkpointsError;
+
+        console.log('All individual checkpoints fetched:', allCheckpoints);
 
         // Get checkpoint visits
         const { data: visits, error: visitsError } = await supabase
@@ -127,44 +144,30 @@ const RealTimeRoundMap = ({ roundId, onBack }: RealTimeRoundMapProps) => {
         const visitedIds = new Set(visits?.map(v => v.checkpoint_id) || []);
         console.log("Visited checkpoint IDs:", Array.from(visitedIds));
 
-        const formattedCheckpoints = (templateCheckpoints || []).map(tc => {
-          const checkpointId = `template_${tc.id}`;
-          const clientId = `template_${tc.client_id}`;
+        // Format checkpoints using individual checkpoints data
+        const formattedCheckpoints: any[] = [];
+        
+        templateCheckpoints?.forEach((tc) => {
+          // Get all checkpoints for this client
+          const clientCheckpoints = allCheckpoints?.filter(cp => cp.client_id === tc.client_id) || [];
           
-          // Enhanced ID matching - check exact matches with visited checkpoint IDs
-          const possibleIds = [
-            checkpointId,           // template_<template_checkpoint_id>
-            clientId,               // template_<client_id>
-            tc.id.toString(),       // template_checkpoint_id as string
-            tc.client_id.toString(), // client_id as string
-            `client_${tc.client_id}`, // client_<client_id>
-            `checkpoint_${tc.id}`,   // checkpoint_<template_checkpoint_id>
-            tc.id,                   // template_checkpoint_id raw
-            tc.client_id             // client_id raw
-          ];
-          
-          // Check if any visit checkpoint_id exactly matches our possible IDs
-          const isVisited = Array.from(visitedIds).some(visitId => {
-            return possibleIds.some(possibleId => {
-              const match = visitId === possibleId || visitId.toString() === possibleId.toString();
-              if (match) {
-                console.log("MATCH FOUND:", visitId, "matches", possibleId, "for checkpoint:", tc.clients.name);
-              }
-              return match;
-            });
+          clientCheckpoints.forEach((checkpoint) => {
+            if (checkpoint.lat && checkpoint.lng) {
+              const isVisited = visitedIds.has(checkpoint.id);
+              
+              console.log("Checkpoint:", checkpoint.name, "ID:", checkpoint.id, "Is Visited:", isVisited);
+              
+              formattedCheckpoints.push({
+                id: checkpoint.id,
+                name: checkpoint.name,
+                lat: checkpoint.lat || 0,
+                lng: checkpoint.lng || 0,
+                visited: isVisited,
+                order_index: checkpoint.order_index,
+                client_id: tc.client_id
+              });
+            }
           });
-          
-          console.log("Checkpoint:", tc.clients.name, "Template ID:", tc.id, "Client ID:", tc.client_id, "Is Visited:", isVisited);
-          
-          return {
-            id: checkpointId,
-            name: tc.clients.name,
-            lat: tc.clients.lat || 0,
-            lng: tc.clients.lng || 0,
-            visited: isVisited,
-            order_index: tc.order_index,
-            client_id: tc.client_id
-          };
         });
 
         // Update the map in real-time when data changes

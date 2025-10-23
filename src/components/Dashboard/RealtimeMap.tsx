@@ -516,8 +516,11 @@ const RealtimeMap = () => {
       const { data: templateCheckpoints, error: templateError } = await supabase
         .from("round_template_checkpoints")
         .select(`
-          *,
-          clients (id, name, address, lat, lng)
+          id,
+          template_id,
+          client_id,
+          order_index,
+          required_signature
         `)
         .in("template_id", templateIds)
         .order("order_index");
@@ -528,6 +531,37 @@ const RealtimeMap = () => {
       }
 
       console.log('Raw template checkpoints from DB:', templateCheckpoints);
+
+      // Get all client IDs from template checkpoints
+      const clientIds = [...new Set(templateCheckpoints?.map(tc => tc.client_id) || [])];
+      
+      console.log('Fetching individual checkpoints for clients:', clientIds);
+      
+      // Get individual checkpoints for each client
+      const { data: clientCheckpoints, error: clientCheckpointsError } = await supabase
+        .from("checkpoints")
+        .select(`
+          id,
+          name,
+          client_id,
+          lat,
+          lng,
+          qr_code,
+          manual_code,
+          order_index,
+          active
+        `)
+        .in("client_id", clientIds)
+        .eq("active", true)
+        .order("client_id, order_index");
+
+      if (clientCheckpointsError) {
+        console.error('Error fetching client checkpoints:', clientCheckpointsError);
+        throw clientCheckpointsError;
+      }
+      
+      console.log('Client checkpoints fetched from database:', clientCheckpoints);
+      console.log('Total checkpoints found:', clientCheckpoints?.length || 0);
 
       // Get checkpoint visits for these rounds
       const { data: visits, error: visitsError } = await supabase
@@ -542,38 +576,54 @@ const RealtimeMap = () => {
 
       console.log('Checkpoint visits:', visits);
 
-      const visitedCheckpoints = new Set(visits?.map(v => v.checkpoint_id) || []);
-
       // Format checkpoints with visit status
       const formattedCheckpoints: RoundCheckpoint[] = [];
       
       console.log('Processing template checkpoints:', templateCheckpoints?.length || 0);
       
       templateCheckpoints?.forEach((tc, index) => {
-        console.log(`Processing checkpoint ${index + 1}:`, tc);
+        console.log(`Processing template checkpoint ${index + 1}:`, tc);
         
-        if (tc.clients && tc.clients.lat && tc.clients.lng) {
-          const activeRound = activeRounds.find(r => r.template_id === tc.template_id);
-          if (activeRound) {
-            const checkpointId = `template_${tc.id}`;
-            const checkpoint = {
+        const activeRound = activeRounds.find(r => r.template_id === tc.template_id);
+        if (!activeRound) {
+          console.log("No active round found for template:", tc.template_id);
+          return;
+        }
+
+        // Get all checkpoints for this client
+        const checkpointsForClient = clientCheckpoints?.filter(cp => cp.client_id === tc.client_id) || [];
+        
+        console.log(`Found ${checkpointsForClient.length} checkpoints for client ${tc.client_id}:`, checkpointsForClient);
+        
+        // Add each individual checkpoint to the round
+        checkpointsForClient.forEach((checkpoint, cpIndex) => {
+          console.log(`  Processing individual checkpoint ${cpIndex + 1}:`, checkpoint);
+          
+          if (checkpoint.lat && checkpoint.lng) {
+            const checkpointId = checkpoint.id;
+            const isVisited = visits?.some(v => v.checkpoint_id === checkpointId && v.round_id === activeRound.id) || false;
+            
+            const formattedCheckpoint = {
               id: checkpointId,
-              name: tc.clients.name,
-              lat: Number(tc.clients.lat),
-              lng: Number(tc.clients.lng),
-              visited: visitedCheckpoints.has(checkpointId),
+              name: checkpoint.name,
+              lat: Number(checkpoint.lat),
+              lng: Number(checkpoint.lng),
+              visited: isVisited,
               round_id: activeRound.id,
               client_id: tc.client_id,
-              order_index: tc.order_index
+              order_index: checkpoint.order_index
             };
             
-            console.log("Adding checkpoint to map:", checkpoint);
-            formattedCheckpoints.push(checkpoint);
+            console.log("Adding checkpoint to map:", formattedCheckpoint);
+            formattedCheckpoints.push(formattedCheckpoint);
           } else {
-            console.log("No active round found for template:", tc.template_id);
+            console.log("  Checkpoint has no valid coordinates:", checkpoint);
           }
-        } else {
-          console.log("Checkpoint has no valid client or coordinates:", tc);
+        });
+        
+        // If no individual checkpoints found for this client, log warning
+        if (checkpointsForClient.length === 0) {
+          console.warn(`WARNING: No checkpoints found for client ${tc.client_id}. This client needs checkpoints created in the Checkpoints table.`);
         }
       });
 

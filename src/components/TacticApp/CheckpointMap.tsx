@@ -59,8 +59,7 @@ const CheckpointMap = ({ roundId, onBack }: CheckpointMapProps) => {
           round_templates (
             round_template_checkpoints (
               id,
-              client_id,
-              clients (id, name, lat, lng)
+              client_id
             )
           )
         `)
@@ -79,53 +78,51 @@ const CheckpointMap = ({ roundId, onBack }: CheckpointMapProps) => {
 
       console.log('Visited checkpoints from DB:', visits);
 
-      // Get checkpoints data to map client_ids from checkpoint visits
-      const visitedCheckpointIds = visits?.map(v => v.checkpoint_id) || [];
-      const { data: checkpoints, error: checkpointsError } = await supabase
+      // Get all client IDs from template
+      const clientIds = roundData?.round_templates?.round_template_checkpoints?.map((tc: any) => tc.client_id) || [];
+      
+      if (clientIds.length === 0) {
+        setCheckpoints([]);
+        return;
+      }
+
+      // Get ALL individual checkpoints for these clients
+      const { data: allCheckpoints, error: checkpointsError } = await supabase
         .from("checkpoints")
-        .select("id, client_id, name")
-        .in("id", visitedCheckpointIds);
+        .select("id, client_id, name, lat, lng")
+        .in("client_id", clientIds)
+        .eq("active", true)
+        .order("client_id, order_index");
 
       if (checkpointsError) throw checkpointsError;
 
-      // Create a map of client_id -> visit_time from completed visits
-      const visitedByClient = new Map<string, string>();
-      checkpoints?.forEach(checkpoint => {
-        const visit = visits?.find(v => v.checkpoint_id === checkpoint.id);
-        if (visit) {
-          visitedByClient.set(checkpoint.client_id, visit.visit_time);
-        }
-      });
-
-      console.log('Visited by client:', Object.fromEntries(visitedByClient));
+      console.log('All individual checkpoints fetched:', allCheckpoints);
 
       // Format checkpoints for map
       const mapCheckpoints: MapCheckpoint[] = [];
 
-      if (roundData?.round_templates?.round_template_checkpoints) {
-        roundData.round_templates.round_template_checkpoints.forEach((tc: any) => {
-          if (tc.clients?.lat && tc.clients?.lng) {
-            const clientId = tc.client_id;
-            const visitTime = visitedByClient.get(clientId);
-            const isVisited = !!visitTime;
-            
-            console.log(`Checkpoint for client ${tc.clients.name} (${clientId}):`, {
-              isVisited,
-              visitTime
-            });
-            
-            mapCheckpoints.push({
-              id: `template_${tc.id}`,
-              name: tc.clients.name,
-              lat: parseFloat(tc.clients.lat),
-              lng: parseFloat(tc.clients.lng),
-              visited: isVisited,
-              visit_time: visitTime,
-              client_name: tc.clients.name
-            });
-          }
-        });
-      }
+      allCheckpoints?.forEach((checkpoint: any) => {
+        if (checkpoint.lat && checkpoint.lng) {
+          const visit = visits?.find(v => v.checkpoint_id === checkpoint.id);
+          const isVisited = !!visit;
+          
+          console.log(`Checkpoint ${checkpoint.name}:`, {
+            id: checkpoint.id,
+            isVisited,
+            visitTime: visit?.visit_time
+          });
+          
+          mapCheckpoints.push({
+            id: checkpoint.id,
+            name: checkpoint.name,
+            lat: parseFloat(checkpoint.lat),
+            lng: parseFloat(checkpoint.lng),
+            visited: isVisited,
+            visit_time: visit?.visit_time,
+            client_name: checkpoint.name
+          });
+        }
+      });
 
       console.log('Final map checkpoints:', mapCheckpoints);
       setCheckpoints(mapCheckpoints);
