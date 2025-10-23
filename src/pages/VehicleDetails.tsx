@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { VehicleOdometerAnalysis } from "@/components/VehicleOdometerAnalysis";
+// import { VehicleOdometerAnalysis } from "@/components/VehicleOdometerAnalysis";
 
 interface Vehicle {
   id: string;
@@ -390,19 +390,13 @@ const VehicleDetails = () => {
           </div>
 
           {/* Tabs com detalhes */}
-          <Tabs defaultValue="odometer" className="space-y-4">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="odometer">Odômetro</TabsTrigger>
+          <Tabs defaultValue="analytics" className="space-y-4">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="analytics">Análise</TabsTrigger>
               <TabsTrigger value="fuel">Abastecimentos</TabsTrigger>
               <TabsTrigger value="maintenance">Manutenção</TabsTrigger>
               <TabsTrigger value="rounds">Rondas</TabsTrigger>
             </TabsList>
-
-            {/* Nova aba de Odômetro */}
-            <TabsContent value="odometer" className="space-y-4">
-              <VehicleOdometerAnalysis vehicleId={vehicle.id} />
-            </TabsContent>
 
             <TabsContent value="analytics" className="space-y-4">
               {/* Dashboard com análises e gráficos */}
