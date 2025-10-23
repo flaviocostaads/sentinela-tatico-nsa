@@ -609,6 +609,7 @@ const History = () => {
                 <p className="text-muted-foreground">Nenhuma ronda encontrada com os filtros aplicados</p>
               </div>
             )}
+          </div>
 
           {/* Dialog de detalhes */}
           <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
