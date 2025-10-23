@@ -340,8 +340,8 @@ const OdometerDialog = ({ open, onClose, onComplete, vehiclePlate, roundId, vehi
               type="number"
               value={odometer}
               onChange={(e) => setOdometer(e.target.value)}
-              placeholder={lastOdometer ? `Maior que ${lastOdometer} km` : "Ex: 125430"}
-              min={lastOdometer ? lastOdometer + 1 : 0}
+              placeholder={lastOdometer !== null ? `Maior que ${lastOdometer} km` : "Ex: 125430"}
+              min={lastOdometer !== null ? lastOdometer + 1 : 1}
               className={
                 odometer && lastOdometer !== null && parseInt(odometer) <= lastOdometer
                   ? "border-destructive"
