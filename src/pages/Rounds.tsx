@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Calendar, Clock, MapPin, User, Car, Route, Settings, Edit, Trash2, Play, Pause, AlertTriangle, Bike } from "lucide-react";
+import { Plus, Calendar, Clock, MapPin, User, Car, Route, Settings, Edit, Trash2, Play, Pause, AlertTriangle, Bike, Info, Building2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import RoundRouteDetails from "@/components/Dashboard/RoundRouteDetails";
 
 interface Round {
   id: string;
@@ -38,7 +39,20 @@ interface Round {
   round_templates?: {
     name: string;
     active: boolean;
+    description?: string;
   };
+  vehicles?: {
+    license_plate: string;
+    brand: string;
+    model: string;
+  };
+}
+
+interface TemplateClient {
+  id: string;
+  name: string;
+  address: string;
+  checkpoints_count: number;
 }
 
 interface RoundTemplate {
@@ -68,6 +82,9 @@ const Rounds = () => {
   const [createRoundDialogOpen, setCreateRoundDialogOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [vehicles, setVehicles] = useState<any[]>([]);
+  const [templateClients, setTemplateClients] = useState<Record<string, TemplateClient[]>>({});
+  const [routeDetailsOpen, setRouteDetailsOpen] = useState(false);
+  const [selectedRouteTemplate, setSelectedRouteTemplate] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     template_id: ""
   });
@@ -85,6 +102,15 @@ const Rounds = () => {
     fetchTemplates();
     fetchVehicles();
   }, []);
+
+  useEffect(() => {
+    // Fetch clients for each template
+    templates.forEach(template => {
+      if (template.id) {
+        fetchTemplateClients(template.id);
+      }
+    });
+  }, [templates]);
 
   const fetchRounds = async () => {
     try {
@@ -156,6 +182,53 @@ const Rounds = () => {
       setVehicles(data || []);
     } catch (error) {
       console.error("Error fetching vehicles:", error);
+    }
+  };
+
+  const fetchTemplateClients = async (templateId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("round_template_checkpoints")
+        .select(`
+          client_id,
+          clients (
+            id,
+            name,
+            address,
+            lat,
+            lng
+          )
+        `)
+        .eq("template_id", templateId);
+
+      if (error) throw error;
+
+      // Group by client and count checkpoints
+      const clientMap = new Map<string, TemplateClient>();
+      
+      data?.forEach((item: any) => {
+        const client = item.clients;
+        if (client) {
+          if (clientMap.has(client.id)) {
+            const existing = clientMap.get(client.id)!;
+            existing.checkpoints_count += 1;
+          } else {
+            clientMap.set(client.id, {
+              id: client.id,
+              name: client.name,
+              address: client.address,
+              checkpoints_count: 1
+            });
+          }
+        }
+      });
+
+      setTemplateClients(prev => ({
+        ...prev,
+        [templateId]: Array.from(clientMap.values())
+      }));
+    } catch (error) {
+      console.error("Error fetching template clients:", error);
     }
   };
 
@@ -640,71 +713,128 @@ const Rounds = () => {
 
             <TabsContent value="active">
               <div className="space-y-4">
-                {activeRounds.map((round) => (
-                  <Card key={round.id} className="tactical-card">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="flex items-center space-x-2">
-                            {round.vehicle === 'car' ? <Car className="w-5 h-5" /> : <Bike className="w-5 h-5" />}
-                            <div>
-                              <CardTitle className="text-lg">
-                                {round.round_templates?.name || round.clients.name}
-                                {round.round_number && (
-                                  <span className="text-sm font-normal text-muted-foreground ml-2">
-                                    (Ronda {round.round_number})
-                                  </span>
-                                )}
-                              </CardTitle>
-                              <p className="text-sm text-muted-foreground">
-                                {round.profiles?.name || "Não atribuído"}
+                {activeRounds.map((round) => {
+                  const clients = round.template_id ? templateClients[round.template_id] || [] : [];
+                  const totalCheckpoints = clients.reduce((sum, client) => sum + client.checkpoints_count, 0);
+                  
+                  return (
+                    <Card key={round.id} className="tactical-card">
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <CardTitle className="text-xl flex items-center space-x-2">
+                              <span>{round.round_templates?.name || round.clients.name}</span>
+                              {round.round_number && (
+                                <Badge variant="outline">Ronda {round.round_number}</Badge>
+                              )}
+                            </CardTitle>
+                            {round.round_templates?.description && (
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {round.round_templates.description}
                               </p>
+                            )}
+                            <div className="flex items-center space-x-4 mt-2">
+                              <span className="text-sm text-muted-foreground flex items-center">
+                                <User className="w-3 h-3 mr-1" />
+                                {round.profiles?.name || "Não atribuído"}
+                              </span>
+                              {round.vehicles && (
+                                <span className="text-sm text-muted-foreground flex items-center">
+                                  <Car className="w-3 h-3 mr-1" />
+                                  {round.vehicles.license_plate}
+                                </span>
+                              )}
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
                           <Badge className={getStatusColor(round.status)}>
                             {getStatusLabel(round.status)}
                           </Badge>
                         </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="flex items-center space-x-2">
-                          <MapPin className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">
-                            {round.clients.address}
-                          </span>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {/* Empresas da Ronda */}
+                        <div>
+                          <p className="text-sm font-medium text-foreground mb-2 flex items-center">
+                            <Building2 className="w-4 h-4 mr-1" />
+                            Empresas ({clients.length}):
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {clients.map((client) => (
+                              <Badge key={client.id} variant="outline" className="text-xs">
+                                {client.name} ({client.checkpoints_count})
+                              </Badge>
+                            ))}
+                            {clients.length === 0 && (
+                              <span className="text-sm text-muted-foreground">Nenhuma empresa configurada</span>
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <Clock className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">
-                            Duração: {formatDuration(round.start_time)}
-                          </span>
+
+                        {/* Informações e Ações */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+                          <div className="flex items-center space-x-2">
+                            <Clock className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">
+                              Duração: {formatDuration(round.start_time)}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">
+                              {totalCheckpoints} checkpoints
+                            </span>
+                          </div>
+                          <div className="flex space-x-2 justify-end">
+                            {round.template_id && clients.length > 0 && (
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button size="sm" variant="outline">
+                                    <Info className="w-3 h-3 mr-1" />
+                                    Detalhes
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                                  <DialogHeader>
+                                    <DialogTitle>Detalhes do Trajeto</DialogTitle>
+                                  </DialogHeader>
+                                  <RoundRouteDetails
+                                    templateId={round.template_id}
+                                    templateName={round.round_templates?.name || ""}
+                                    templateDescription={round.round_templates?.description}
+                                    clients={clients}
+                                  />
+                                </DialogContent>
+                              </Dialog>
+                            )}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => updateRoundStatus(round.id, 'completed')}
+                            >
+                              <Pause className="w-3 h-3 mr-1" />
+                              Finalizar
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="bg-tactical-red hover:bg-tactical-red/90"
+                              onClick={() => updateRoundStatus(round.id, 'incident')}
+                            >
+                              <AlertTriangle className="w-3 h-3 mr-1" />
+                              Incidente
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => deleteRound(round.id)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex space-x-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => updateRoundStatus(round.id, 'completed')}
-                          >
-                            <Pause className="w-3 h-3 mr-1" />
-                            Finalizar
-                          </Button>
-                          <Button
-                            size="sm"
-                            className="bg-tactical-red hover:bg-tactical-red/90"
-                            onClick={() => updateRoundStatus(round.id, 'incident')}
-                          >
-                            <AlertTriangle className="w-3 h-3 mr-1" />
-                            Incidente
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
                 {activeRounds.length === 0 && (
                   <div className="text-center py-12">
                     <p className="text-muted-foreground">Nenhuma ronda ativa encontrada</p>
@@ -715,79 +845,115 @@ const Rounds = () => {
 
             <TabsContent value="pending">
               <div className="space-y-4">
-                {pendingRounds.map((round) => (
-                  <Card key={round.id} className="tactical-card">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="flex items-center space-x-2">
-                            {round.vehicle === 'car' ? <Car className="w-5 h-5" /> : <Bike className="w-5 h-5" />}
-                            <div>
-                              <CardTitle className="text-lg">
-                                {round.round_templates?.name || round.clients.name}
-                                {round.round_number && (
-                                  <span className="text-sm font-normal text-muted-foreground ml-2">
-                                    (Ronda {round.round_number})
-                                  </span>
-                                )}
-                              </CardTitle>
-                              <p className="text-sm text-muted-foreground">
-                                {round.profiles?.name || "Não atribuído"}
+                {pendingRounds.map((round) => {
+                  const clients = round.template_id ? templateClients[round.template_id] || [] : [];
+                  const totalCheckpoints = clients.reduce((sum, client) => sum + client.checkpoints_count, 0);
+                  
+                  return (
+                    <Card key={round.id} className="tactical-card">
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <CardTitle className="text-xl flex items-center space-x-2">
+                              <span>{round.round_templates?.name || round.clients.name}</span>
+                              {round.round_number && (
+                                <Badge variant="outline">Ronda {round.round_number}</Badge>
+                              )}
+                            </CardTitle>
+                            {round.round_templates?.description && (
+                              <p className="text-sm text-muted-foreground mt-1">
+                                {round.round_templates.description}
                               </p>
+                            )}
+                            <div className="flex items-center space-x-4 mt-2">
+                              <span className="text-sm text-muted-foreground flex items-center">
+                                <User className="w-3 h-3 mr-1" />
+                                {round.profiles?.name || "Não atribuído"}
+                              </span>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
                           <Badge className={getStatusColor(round.status)}>
                             {getStatusLabel(round.status)}
                           </Badge>
                         </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="flex items-center space-x-2">
-                          <MapPin className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">
-                            {round.clients.address}
-                          </span>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div>
+                          <p className="text-sm font-medium text-foreground mb-2 flex items-center">
+                            <Building2 className="w-4 h-4 mr-1" />
+                            Empresas ({clients.length}):
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {clients.map((client) => (
+                              <Badge key={client.id} variant="outline" className="text-xs">
+                                {client.name} ({client.checkpoints_count})
+                              </Badge>
+                            ))}
+                          </div>
                         </div>
-                        <div className="flex items-center space-x-2">
-                          <Clock className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">
-                            Criada em: {new Date(round.created_at).toLocaleDateString('pt-BR')}
-                          </span>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+                          <div className="flex items-center space-x-2">
+                            <Clock className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">
+                              Criada: {new Date(round.created_at).toLocaleDateString('pt-BR')}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <MapPin className="w-4 h-4 text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground">
+                              {totalCheckpoints} checkpoints
+                            </span>
+                          </div>
+                          <div className="flex space-x-2 justify-end">
+                            {round.template_id && clients.length > 0 && (
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button size="sm" variant="outline">
+                                    <Info className="w-3 h-3 mr-1" />
+                                    Detalhes
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                                  <DialogHeader>
+                                    <DialogTitle>Detalhes do Trajeto</DialogTitle>
+                                  </DialogHeader>
+                                  <RoundRouteDetails
+                                    templateId={round.template_id}
+                                    templateName={round.round_templates?.name || ""}
+                                    templateDescription={round.round_templates?.description}
+                                    clients={clients}
+                                  />
+                                </DialogContent>
+                              </Dialog>
+                            )}
+                            <Button
+                              size="sm"
+                              className="bg-tactical-green hover:bg-tactical-green/90"
+                              onClick={() => updateRoundStatus(round.id, 'active')}
+                            >
+                              <Play className="w-3 h-3 mr-1" />
+                              Iniciar
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openEditDialog(round)}
+                            >
+                              <Edit className="w-3 h-3" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => deleteRound(round.id)}
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex space-x-2">
-                          <Button
-                            size="sm"
-                            className="bg-tactical-green hover:bg-tactical-green/90"
-                            onClick={() => updateRoundStatus(round.id, 'active')}
-                          >
-                            <Play className="w-3 h-3 mr-1" />
-                            Iniciar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => openEditDialog(round)}
-                          >
-                            <Edit className="w-3 h-3 mr-1" />
-                            Editar
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => deleteRound(round.id)}
-                          >
-                            <Trash2 className="w-3 h-3 mr-1" />
-                            Excluir
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
                 {pendingRounds.length === 0 && (
                   <div className="text-center py-12">
                     <p className="text-muted-foreground">Nenhuma ronda pendente encontrada</p>

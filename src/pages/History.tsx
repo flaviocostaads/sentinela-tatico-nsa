@@ -21,6 +21,7 @@ interface Round {
   client_id: string;
   user_id: string;
   vehicle: 'car' | 'motorcycle' | 'on_foot';
+  vehicle_id?: string;
   status: 'pending' | 'active' | 'completed' | 'incident';
   start_time?: string;
   end_time?: string;
@@ -38,6 +39,12 @@ interface Round {
     name: string;
     shift_type: string;
     description?: string;
+  };
+  vehicles?: {
+    license_plate: string;
+    brand: string;
+    model: string;
+    fuel_capacity?: number;
   };
 }
 
@@ -99,7 +106,8 @@ const History = () => {
           *,
           clients (name, address),
           profiles (name),
-          round_templates (name, shift_type, description)
+          round_templates (name, shift_type, description),
+          vehicles (license_plate, brand, model, fuel_capacity)
         `)
         .order("created_at", { ascending: false });
 
@@ -208,6 +216,29 @@ const History = () => {
     const hours = Math.floor(diff / 60);
     const minutes = diff % 60;
     return `${hours}h ${minutes}m`;
+  };
+
+  const calculateFuelConsumption = (round: Round) => {
+    if (!round.start_odometer || !round.end_odometer) {
+      return { distance: 0, consumption: '-', estimatedCost: '-' };
+    }
+
+    const distance = round.end_odometer - round.start_odometer;
+    
+    // Média de consumo padrão por tipo de veículo (km/L)
+    // Estes valores podem vir do registro do veículo no futuro
+    const avgConsumption = round.vehicle === 'car' ? 10 : 30; // Carro: 10km/L, Moto: 30km/L
+    const fuelUsed = distance / avgConsumption;
+    
+    // Preço médio do combustível (pode ser configurável)
+    const fuelPrice = 5.50; // R$ por litro
+    const estimatedCost = fuelUsed * fuelPrice;
+
+    return {
+      distance,
+      consumption: `${fuelUsed.toFixed(1)}L (${avgConsumption}km/L)`,
+      estimatedCost: `R$ ${estimatedCost.toFixed(2)}`
+    };
   };
 
   const exportData = () => {
@@ -430,89 +461,154 @@ const History = () => {
 
           {/* Lista de rondas */}
           <div className="space-y-4">
-            {filteredRounds.map((round) => (
-              <Card 
-                key={round.id} 
-                className="tactical-card cursor-pointer hover:shadow-lg transition-shadow"
-                onClick={() => handleRoundClick(round)}
-              >
-                <CardContent className="p-4">
-                  <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-center">
-                    <div className="space-y-1">
-                      <p className="font-medium">{round.clients.name}</p>
-                      <p className="text-sm text-muted-foreground">{round.profiles?.name || 'Não atribuído'}</p>
-                    </div>
-                    <div>
-                      <Badge className={getStatusColor(round.status)}>
-                        {getStatusLabel(round.status)}
-                      </Badge>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {new Date(round.created_at).toLocaleDateString('pt-BR')}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {formatDuration(round.start_time, round.end_time)}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {round.vehicle === 'car' ? 'Carro' : 'Moto'}
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <MapPin className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground truncate">
-                        {round.clients.address.split(',')[0]}
-                      </span>
-                    </div>
-                    <div className="flex justify-end">
-                      {profile?.role === 'admin' && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
-                              className="h-8 w-8 p-0 text-destructive hover:text-destructive/90 hover:bg-destructive/10"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Excluir Ronda</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Tem certeza que deseja excluir esta ronda? Esta ação irá remover permanentemente todos os dados relacionados (checkpoints visitados, incidentes, fotos, etc.) e não pode ser desfeita.
-                                <br /><br />
-                                <strong>Cliente:</strong> {round.clients.name}
-                                <br />
-                                <strong>Tático:</strong> {round.profiles?.name || 'Não atribuído'}
-                                <br />
-                                <strong>Data:</strong> {new Date(round.created_at).toLocaleDateString('pt-BR')}
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() => handleDeleteRound(round.id, round.clients.name)}
-                                disabled={deleteLoading}
-                                className="bg-destructive hover:bg-destructive/90"
-                              >
-                                {deleteLoading ? "Excluindo..." : "Excluir"}
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+            {filteredRounds.map((round) => {
+              const fuelData = calculateFuelConsumption(round);
+              
+              return (
+                <Card 
+                  key={round.id} 
+                  className="tactical-card cursor-pointer hover:shadow-lg transition-shadow"
+                  onClick={() => handleRoundClick(round)}
+                >
+                  <CardContent className="p-6">
+                    <div className="space-y-4">
+                      {/* Cabeçalho com nome da ronda e status */}
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-foreground">
+                            {round.round_templates?.name || round.clients.name}
+                          </h3>
+                          {round.round_templates?.description && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {round.round_templates.description}
+                            </p>
+                          )}
+                        </div>
+                        <Badge className={getStatusColor(round.status)}>
+                          {getStatusLabel(round.status)}
+                        </Badge>
+                      </div>
+
+                      {/* Grid com informações principais */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div>
+                          <p className="text-muted-foreground">Tático</p>
+                          <p className="font-medium text-foreground">
+                            {round.profiles?.name || 'Não atribuído'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Data</p>
+                          <p className="font-medium text-foreground">
+                            {new Date(round.created_at).toLocaleDateString('pt-BR')}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Veículo</p>
+                          <p className="font-medium text-foreground">
+                            {round.vehicles?.license_plate || (round.vehicle === 'car' ? 'Carro' : round.vehicle === 'motorcycle' ? 'Moto' : 'A pé')}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Duração</p>
+                          <p className="font-medium text-foreground">
+                            {formatDuration(round.start_time, round.end_time)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Horários e distância */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm pt-4 border-t">
+                        <div>
+                          <p className="text-muted-foreground">Hora Inicial</p>
+                          <p className="font-medium text-foreground">
+                            {round.start_time ? new Date(round.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Hora Final</p>
+                          <p className="font-medium text-foreground">
+                            {round.end_time ? new Date(round.end_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '-'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">KM Percorrido</p>
+                          <p className="font-medium text-foreground">
+                            {fuelData.distance > 0 ? `${fuelData.distance} km` : '-'}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-muted-foreground">Consumo Estimado</p>
+                          <p className="font-medium text-foreground">
+                            {fuelData.consumption}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Custo estimado */}
+                      {fuelData.distance > 0 && (
+                        <div className="pt-4 border-t">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-muted-foreground">Custo Estimado de Combustível</span>
+                            <Badge variant="outline" className="text-sm font-semibold">
+                              {fuelData.estimatedCost}
+                            </Badge>
+                          </div>
+                        </div>
                       )}
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          {filteredRounds.length === 0 && !loading && (
-            <div className="text-center py-12">
-              <p className="text-muted-foreground">Nenhuma ronda encontrada com os filtros aplicados</p>
-            </div>
-          )}
+                  </CardContent>
+                  {profile?.role === 'admin' && (
+                    <div className="px-6 pb-4">
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="w-full text-destructive hover:text-destructive/90 hover:bg-destructive/10"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Excluir Ronda
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Excluir Ronda</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tem certeza que deseja excluir esta ronda? Esta ação irá remover permanentemente todos os dados relacionados (checkpoints visitados, incidentes, fotos, etc.) e não pode ser desfeita.
+                              <br /><br />
+                              <strong>Ronda:</strong> {round.round_templates?.name || round.clients.name}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel onClick={(e) => e.stopPropagation()}>
+                              Cancelar
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteRound(round.id, round.clients.name);
+                              }}
+                              disabled={deleteLoading}
+                              className="bg-destructive hover:bg-destructive/90"
+                            >
+                              {deleteLoading ? "Excluindo..." : "Excluir"}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
+            
+            {filteredRounds.length === 0 && !loading && (
+              <div className="text-center py-12">
+                <p className="text-muted-foreground">Nenhuma ronda encontrada com os filtros aplicados</p>
+              </div>
+            )}
 
           {/* Dialog de detalhes */}
           <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
