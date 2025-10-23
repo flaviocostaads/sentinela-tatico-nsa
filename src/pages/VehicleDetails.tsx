@@ -15,6 +15,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/hooks/useAuth";
+import FuelDeleteButton from "@/components/ui/fuel-delete-button";
+import MaintenanceDeleteButton from "@/components/ui/maintenance-delete-button";
 // import { VehicleOdometerAnalysis } from "@/components/VehicleOdometerAnalysis";
 
 interface Vehicle {
@@ -196,24 +198,24 @@ const VehicleDetails = () => {
           ? `AJUSTE DE ODÔMETRO (REDUÇÃO): ${Math.abs(odometerDiff)} km` 
           : `Atualização de odômetro: +${odometerDiff} km`;
         
-        const {
-          error: logError
-        } = await supabase.from("audit_logs").insert({
-          user_id: user.id,
-          user_name: profile?.name || user.email || "",
-          action: odometerDiff < 0 ? "ODOMETER_ADJUSTMENT" : "UPDATE_ODOMETER",
-          table_name: "vehicles",
-          record_id: id,
-          old_values: {
+        // Use the log_audit_event function instead of direct insert
+        const { error: logError } = await supabase.rpc('log_audit_event', {
+          p_user_id: user.id,
+          p_user_name: profile?.name || user.email || "",
+          p_action: odometerDiff < 0 ? "ODOMETER_ADJUSTMENT" : "UPDATE_ODOMETER",
+          p_table_name: "vehicles",
+          p_record_id: id,
+          p_old_values: {
             current_odometer: vehicle.current_odometer,
             license_plate: vehicle.license_plate
           },
-          new_values: {
+          p_new_values: {
             current_odometer: editData.current_odometer,
             difference: odometerDiff,
             description: actionDescription
           }
         });
+        
         if (logError) console.error("Error logging odometer change:", logError);
       }
       
@@ -530,23 +532,29 @@ const VehicleDetails = () => {
                   <CardTitle>Histórico de Abastecimentos</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {fuelLogs.length === 0 ? <p className="text-center text-muted-foreground py-8">
+                   {fuelLogs.length === 0 ? <p className="text-center text-muted-foreground py-8">
                       Nenhum abastecimento registrado
                     </p> : <div className="space-y-3">
                       {fuelLogs.map(log => <div key={log.id} className="flex items-center justify-between p-3 border rounded-lg">
-                          <div>
+                          <div className="flex-1">
                             <p className="font-medium">{log.fuel_amount}L</p>
                             <p className="text-sm text-muted-foreground">
                               {new Date(log.created_at).toLocaleDateString()}
                             </p>
                             {log.fuel_station && <p className="text-sm text-muted-foreground">{log.fuel_station}</p>}
                           </div>
-                          <div className="text-right">
+                          <div className="text-right mr-2">
                             <p className="font-medium">{log.odometer_reading.toLocaleString()} km</p>
                             {log.fuel_cost && <p className="text-sm text-muted-foreground">
                                 R$ {log.fuel_cost.toFixed(2)}
                               </p>}
                           </div>
+                          {canEditOdometer && (
+                            <FuelDeleteButton 
+                              logId={log.id} 
+                              onDelete={() => fetchVehicleDetails()} 
+                            />
+                          )}
                         </div>)}
                     </div>}
                 </CardContent>
@@ -559,13 +567,21 @@ const VehicleDetails = () => {
                   <CardTitle>Histórico de Manutenção</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {maintenanceLogs.length === 0 ? <p className="text-center text-muted-foreground py-8">
+                   {maintenanceLogs.length === 0 ? <p className="text-center text-muted-foreground py-8">
                       Nenhuma manutenção registrada
                     </p> : <div className="space-y-3">
                       {maintenanceLogs.map(log => <div key={log.id} className="p-3 border rounded-lg">
                           <div className="flex items-center justify-between mb-2">
                             <h4 className="font-medium">{log.service_type}</h4>
-                            <Badge variant="outline">{log.maintenance_type}</Badge>
+                            <div className="flex items-center space-x-2">
+                              <Badge variant="outline">{log.maintenance_type}</Badge>
+                              {canEditOdometer && (
+                                <MaintenanceDeleteButton 
+                                  logId={log.id} 
+                                  onDelete={() => fetchVehicleDetails()} 
+                                />
+                              )}
+                            </div>
                           </div>
                           <p className="text-sm text-muted-foreground mb-2">{log.description}</p>
                           <div className="flex items-center justify-between text-sm">

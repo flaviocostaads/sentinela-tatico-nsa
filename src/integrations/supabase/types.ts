@@ -1119,14 +1119,10 @@ export type Database = {
     Views: {
       vehicle_odometer_history: {
         Row: {
+          id: string | null
           km: number | null
-          km_diff: number | null
-          notes: string | null
-          previous_km: number | null
           recorded_at: string | null
-          round_id: string | null
           source: string | null
-          user_id: string | null
           vehicle_id: string | null
         }
         Relationships: []

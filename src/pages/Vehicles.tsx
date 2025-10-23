@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Car, Bike, Plus, Fuel, MapPin, Calendar, Wrench, Eye, Edit } from "lucide-react";
+import { Car, Bike, Plus, Fuel, MapPin, Calendar, Wrench, Eye, Edit, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 
 interface Vehicle {
   id: string;
@@ -45,13 +47,19 @@ const Vehicles = () => {
   const [editingVehicle, setEditingVehicle] = useState<Vehicle | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  
+  // Check if user is admin or operador
+  const canEditOdometer = profile?.role === 'admin' || profile?.role === 'operador';
+  
   const [editFormData, setEditFormData] = useState({
     license_plate: "",
     brand: "",
     model: "",
     year: new Date().getFullYear(),
     type: "",
-    fuel_capacity: 0
+    fuel_capacity: 0,
+    current_odometer: 0
   });
   const [formData, setFormData] = useState({
     license_plate: "",
@@ -254,7 +262,8 @@ const Vehicles = () => {
       model: vehicle.model,
       year: vehicle.year,
       type: vehicle.type,
-      fuel_capacity: vehicle.fuel_capacity || 0
+      fuel_capacity: vehicle.fuel_capacity || 0,
+      current_odometer: vehicle.current_odometer
     });
     setEditDialogOpen(true);
   };
@@ -265,13 +274,41 @@ const Vehicles = () => {
     if (!editingVehicle) return;
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+
+      // Validate odometer change
+      if (editFormData.current_odometer < editingVehicle.current_odometer) {
+        if (!canEditOdometer) {
+          toast({
+            title: "Erro",
+            description: "Apenas administradores e operadores podem diminuir o odômetro do veículo.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        // Confirm the action for admins/operators
+        const confirmed = window.confirm(
+          `ATENÇÃO: Você está diminuindo o odômetro de ${editingVehicle.current_odometer.toLocaleString()} km para ${editFormData.current_odometer.toLocaleString()} km.\n\n` +
+          `Esta ação deve ser usada apenas para corrigir erros de lançamento.\n\n` +
+          `Diferença: ${(editingVehicle.current_odometer - editFormData.current_odometer).toLocaleString()} km\n\n` +
+          `Deseja continuar?`
+        );
+        
+        if (!confirmed) {
+          return;
+        }
+      }
+
       const vehicleData = {
         license_plate: editFormData.license_plate.toUpperCase(),
         brand: editFormData.brand,
         model: editFormData.model,
         year: editFormData.year,
         type: editFormData.type as 'car' | 'motorcycle',
-        fuel_capacity: editFormData.fuel_capacity > 0 ? editFormData.fuel_capacity : null
+        fuel_capacity: editFormData.fuel_capacity > 0 ? editFormData.fuel_capacity : null,
+        current_odometer: editFormData.current_odometer
       };
 
       const { error } = await supabase
@@ -281,9 +318,39 @@ const Vehicles = () => {
 
       if (error) throw error;
 
+      // Log odometer change if it was updated
+      if (editingVehicle.current_odometer !== editFormData.current_odometer) {
+        const odometerDiff = editFormData.current_odometer - editingVehicle.current_odometer;
+        const actionDescription = odometerDiff < 0 
+          ? `AJUSTE DE ODÔMETRO (REDUÇÃO): ${Math.abs(odometerDiff)} km` 
+          : `Atualização de odômetro: +${odometerDiff} km`;
+        
+        // Use the log_audit_event function instead of direct insert
+        const { error: logError } = await supabase.rpc('log_audit_event', {
+          p_user_id: user.id,
+          p_user_name: profile?.name || user.email || "",
+          p_action: odometerDiff < 0 ? "ODOMETER_ADJUSTMENT" : "UPDATE_ODOMETER",
+          p_table_name: "vehicles",
+          p_record_id: editingVehicle.id,
+          p_old_values: {
+            current_odometer: editingVehicle.current_odometer,
+            license_plate: editingVehicle.license_plate
+          },
+          p_new_values: {
+            current_odometer: editFormData.current_odometer,
+            difference: odometerDiff,
+            description: actionDescription
+          }
+        });
+        
+        if (logError) console.error("Error logging odometer change:", logError);
+      }
+
       toast({
         title: "Sucesso",
-        description: "Veículo atualizado com sucesso!",
+        description: editFormData.current_odometer < editingVehicle.current_odometer 
+          ? "Odômetro ajustado com sucesso! Esta ação foi registrada no log de auditoria."
+          : "Veículo atualizado com sucesso!",
       });
 
       setEditDialogOpen(false);
@@ -664,6 +731,65 @@ const Vehicles = () => {
                           step="0.1"
                         />
                       </div>
+                    </div>
+
+                    {/* Campo de Odômetro com Validação Especial */}
+                    <div className="space-y-2">
+                      <Label htmlFor="edit_current_odometer" className="flex items-center gap-2">
+                        Odômetro Atual (km)
+                        {canEditOdometer && (
+                          <Badge variant="outline" className="text-xs bg-tactical-amber/10 text-tactical-amber border-tactical-amber">
+                            Admin/Operador
+                          </Badge>
+                        )}
+                      </Label>
+                      <Input 
+                        id="edit_current_odometer" 
+                        type="number" 
+                        value={editFormData.current_odometer} 
+                        onChange={e => setEditFormData({
+                          ...editFormData,
+                          current_odometer: parseInt(e.target.value) || 0
+                        })} 
+                        className={
+                          editingVehicle && editFormData.current_odometer < editingVehicle.current_odometer
+                            ? "border-tactical-amber"
+                            : ""
+                        }
+                      />
+                      <div className="text-xs text-muted-foreground">
+                        Valor atual no sistema: <span className="font-medium">{editingVehicle?.current_odometer.toLocaleString()} km</span>
+                      </div>
+                      
+                      {/* Aviso quando o valor é menor */}
+                      {editingVehicle && editFormData.current_odometer < editingVehicle.current_odometer && (
+                        <Alert className={canEditOdometer ? "border-tactical-amber bg-tactical-amber/5" : "border-destructive bg-destructive/5"}>
+                          <AlertTriangle className={`h-4 w-4 ${canEditOdometer ? "text-tactical-amber" : "text-destructive"}`} />
+                          <AlertDescription className="text-xs">
+                            {canEditOdometer ? (
+                              <>
+                                <strong>Atenção:</strong> Você está diminuindo o odômetro em{" "}
+                                <strong>{(editingVehicle.current_odometer - editFormData.current_odometer).toLocaleString()} km</strong>.
+                                <br />
+                                Esta ação deve ser usada apenas para corrigir erros de lançamento e será registrada no log de auditoria.
+                              </>
+                            ) : (
+                              <>
+                                <strong>Não permitido:</strong> Apenas administradores e operadores podem diminuir o odômetro do veículo.
+                                <br />
+                                Esta função existe para corrigir erros de lançamento.
+                              </>
+                            )}
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      
+                      {/* Informação quando o valor aumenta normalmente */}
+                      {editingVehicle && editFormData.current_odometer > editingVehicle.current_odometer && (
+                        <div className="text-xs text-tactical-green">
+                          ✓ Aumento de {(editFormData.current_odometer - editingVehicle.current_odometer).toLocaleString()} km
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex gap-2">

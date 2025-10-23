@@ -19,13 +19,13 @@ import {
 import { Button } from "@/components/ui/button";
 
 interface OdometerRecord {
+  id: string;
   vehicle_id: string;
   km: number;
   source: string;
   recorded_at: string;
-  notes: string | null;
-  previous_km: number | null;
-  km_diff: number | null;
+  previous_km?: number | null;
+  km_diff?: number | null;
 }
 
 interface OdometerAnalysisProps {
@@ -47,7 +47,19 @@ export const VehicleOdometerAnalysis = ({ vehicleId }: OdometerAnalysisProps) =>
         .limit(50);
 
       if (error) throw error;
-      setRecords(data || []);
+      
+      // Add calculated fields for previous_km and km_diff
+      const processedData = (data || []).map((record, index, arr) => {
+        const previous_km = index < arr.length - 1 ? arr[index + 1].km : null;
+        const km_diff = previous_km ? record.km - previous_km : null;
+        return {
+          ...record,
+          previous_km,
+          km_diff
+        };
+      });
+      
+      setRecords(processedData);
     } catch (error) {
       console.error('Error fetching odometer history:', error);
     } finally {
@@ -231,12 +243,6 @@ export const VehicleOdometerAnalysis = ({ vehicleId }: OdometerAnalysisProps) =>
                                 </>
                               )}
                             </div>
-
-                            {record.notes && !isExpanded && (
-                              <p className="text-sm text-muted-foreground mt-1 line-clamp-1">
-                                {record.notes}
-                              </p>
-                            )}
                           </div>
                         </div>
 
@@ -246,12 +252,6 @@ export const VehicleOdometerAnalysis = ({ vehicleId }: OdometerAnalysisProps) =>
                           <ChevronDown className="w-5 h-5 text-muted-foreground" />
                         )}
                       </div>
-
-                      {isExpanded && record.notes && (
-                        <div className="mt-3 ml-11 p-3 bg-muted/50 rounded-lg">
-                          <p className="text-sm">{record.notes}</p>
-                        </div>
-                      )}
                     </div>
                   </div>
                 );
