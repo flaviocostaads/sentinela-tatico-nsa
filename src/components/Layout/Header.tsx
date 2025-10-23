@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { NotificationPanel } from "@/components/Layout/NotificationPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 const Header = () => {
@@ -38,10 +39,7 @@ const Header = () => {
           <ThemeToggle />
           
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
-            <Bell className="h-5 w-5" />
-            <span className="absolute -top-1 -right-1 h-3 w-3 bg-tactical-red rounded-full border-2 border-background pulse-tactical"></span>
-          </Button>
+          <NotificationPanel />
 
           {/* Settings */}
           <Button variant="ghost" size="icon" onClick={() => navigate('/settings')}>

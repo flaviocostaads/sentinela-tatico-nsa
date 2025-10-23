@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, Shield, UserCheck, Search, Mail, Key } from "lucide-react";
+import { Plus, Edit, Trash2, Shield, UserCheck, Search, Mail, Key, LayoutGrid, List } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,6 +31,7 @@ const Users = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -586,7 +587,7 @@ const Users = () => {
             </Dialog>
           </div>
 
-          {/* Barra de pesquisa */}
+          {/* Barra de pesquisa e toggle de visualização */}
           <Card className="tactical-card">
             <CardContent className="p-4">
               <div className="flex items-center space-x-4">
@@ -600,6 +601,24 @@ const Users = () => {
                       className="pl-9"
                     />
                   </div>
+                </div>
+                <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
+                  <Button
+                    variant={viewMode === "grid" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("grid")}
+                    className="h-8 w-8 p-0"
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === "list" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("list")}
+                    className="h-8 w-8 p-0"
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -635,39 +654,127 @@ const Users = () => {
 
             {["all", "tatico", "operador", "admin"].map((role) => (
               <TabsContent key={role} value={role} className="mt-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className={viewMode === "grid" 
+                  ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" 
+                  : "flex flex-col gap-3"}>
                   {filteredProfiles.map((profile) => (
-                    <Card key={profile.id} className="tactical-card">
-                      <CardHeader>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3">
-                            <div className={`p-2 rounded-full ${getRoleColor(profile.role)}`}>
-                              {getRoleIcon(profile.role)}
+                    <Card key={profile.id} className={`tactical-card ${viewMode === "list" ? "hover:shadow-lg transition-shadow" : ""}`}>
+                      {viewMode === "grid" ? (
+                        <>
+                          <CardHeader>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center space-x-3">
+                                <div className={`p-2 rounded-full ${getRoleColor(profile.role)}`}>
+                                  {getRoleIcon(profile.role)}
+                                </div>
+                                <div>
+                                  <CardTitle className="text-lg">{profile.name}</CardTitle>
+                                  <p className="text-sm text-muted-foreground">{profile.email}</p>
+                                </div>
+                              </div>
                             </div>
-                            <div>
-                              <CardTitle className="text-lg">{profile.name}</CardTitle>
-                              <p className="text-sm text-muted-foreground">{profile.email}</p>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between">
+                                <Badge className={getRoleColor(profile.role)}>
+                                  {getRoleLabel(profile.role)}
+                                </Badge>
+                                <Badge variant={profile.active ? "default" : "secondary"}>
+                                  {profile.active ? "Ativo" : "Inativo"}
+                                </Badge>
+                              </div>
+                              
+                              <div className="text-xs text-muted-foreground">
+                                Criado em: {new Date(profile.created_at).toLocaleDateString('pt-BR')}
+                              </div>
+                              
+                              <div className="flex flex-col space-y-2">
+                                <div className="flex space-x-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => toggleUserStatus(profile.user_id, profile.active)}
+                                    className={profile.active ? "hover:bg-tactical-red/10 hover:text-tactical-red" : "hover:bg-tactical-green/10 hover:text-tactical-green"}
+                                  >
+                                    {profile.active ? "Desativar" : "Ativar"}
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setResetPasswordData({
+                                        userId: profile.user_id,
+                                        userName: profile.name,
+                                        email: profile.email,
+                                        newPassword: "",
+                                        confirmPassword: ""
+                                      });
+                                      setResetPasswordDialogOpen(true);
+                                    }}
+                                    className="hover:bg-tactical-blue/10 hover:text-tactical-blue"
+                                  >
+                                    <Key className="w-4 h-4 mr-1" />
+                                    Redefinir Senha
+                                  </Button>
+                                </div>
+                                {profile.role !== "admin" ? (
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    onClick={() => deleteUser(profile.user_id, profile.name)}
+                                    className="bg-tactical-red hover:bg-tactical-red/90 w-full"
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-1" />
+                                    Excluir Permanentemente
+                                  </Button>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setEditEmailData({
+                                        userId: profile.user_id,
+                                        currentEmail: profile.email,
+                                        newEmail: "",
+                                        alternativeEmail: ""
+                                      });
+                                      setEmailDialogOpen(true);
+                                    }}
+                                    className="hover:bg-tactical-blue/10 hover:text-tactical-blue w-full"
+                                  >
+                                    <Edit className="w-4 h-4 mr-1" />
+                                    Alterar Email
+                                  </Button>
+                                )}
+                              </div>
                             </div>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <Badge className={getRoleColor(profile.role)}>
-                              {getRoleLabel(profile.role)}
-                            </Badge>
-                            <Badge variant={profile.active ? "default" : "secondary"}>
-                              {profile.active ? "Ativo" : "Inativo"}
-                            </Badge>
-                          </div>
-                          
-                          <div className="text-xs text-muted-foreground">
-                            Criado em: {new Date(profile.created_at).toLocaleDateString('pt-BR')}
-                          </div>
-                          
-                           <div className="flex flex-col space-y-2">
-                            <div className="flex space-x-2">
+                          </CardContent>
+                        </>
+                      ) : (
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between gap-4">
+                            <div className="flex items-center gap-4 flex-1">
+                              <div className={`p-2 rounded-full ${getRoleColor(profile.role)}`}>
+                                {getRoleIcon(profile.role)}
+                              </div>
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="font-semibold">{profile.name}</h3>
+                                  <Badge className={getRoleColor(profile.role)} variant="outline">
+                                    {getRoleLabel(profile.role)}
+                                  </Badge>
+                                  <Badge variant={profile.active ? "default" : "secondary"}>
+                                    {profile.active ? "Ativo" : "Inativo"}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground">{profile.email}</p>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Criado em: {new Date(profile.created_at).toLocaleDateString('pt-BR')}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -694,39 +801,39 @@ const Users = () => {
                                 <Key className="w-4 h-4 mr-1" />
                                 Redefinir Senha
                               </Button>
+                              {profile.role !== "admin" ? (
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={() => deleteUser(profile.user_id, profile.name)}
+                                  className="bg-tactical-red hover:bg-tactical-red/90"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-1" />
+                                  Excluir
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setEditEmailData({
+                                      userId: profile.user_id,
+                                      currentEmail: profile.email,
+                                      newEmail: "",
+                                      alternativeEmail: ""
+                                    });
+                                    setEmailDialogOpen(true);
+                                  }}
+                                  className="hover:bg-tactical-blue/10 hover:text-tactical-blue"
+                                >
+                                  <Edit className="w-4 h-4 mr-1" />
+                                  Alterar Email
+                                </Button>
+                              )}
                             </div>
-                            {profile.role !== "admin" ? (
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                onClick={() => deleteUser(profile.user_id, profile.name)}
-                                className="bg-tactical-red hover:bg-tactical-red/90 w-full"
-                              >
-                                <Trash2 className="w-4 h-4 mr-1" />
-                                Excluir Permanentemente
-                              </Button>
-                            ) : (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setEditEmailData({
-                                    userId: profile.user_id,
-                                    currentEmail: profile.email,
-                                    newEmail: "",
-                                    alternativeEmail: ""
-                                  });
-                                  setEmailDialogOpen(true);
-                                }}
-                                className="hover:bg-tactical-blue/10 hover:text-tactical-blue w-full"
-                              >
-                                <Edit className="w-4 h-4 mr-1" />
-                                Alterar Email
-                              </Button>
-                            )}
                           </div>
-                        </div>
-                      </CardContent>
+                        </CardContent>
+                      )}
                     </Card>
                   ))}
                 </div>

@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Clients from "./pages/Clients";
 import Users from "./pages/Users";
+import Documentation from "./pages/Documentation";
 import NotFound from "./pages/NotFound";
 import Rounds from "./pages/Rounds";
 import MapViewPage from "./pages/MapView";
@@ -172,6 +173,11 @@ const App = () => (
               <Route path="/qr-scanner" element={
                 <ProtectedRoute>
                   <QRScannerPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/documentation" element={
+                <ProtectedRoute>
+                  <Documentation />
                 </ProtectedRoute>
               } />
               <Route path="*" element={<NotFound />} />

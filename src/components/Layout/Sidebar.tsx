@@ -11,7 +11,8 @@ import {
   Clock,
   Building2,
   Fuel,
-  Wrench
+  Wrench,
+  BookOpen
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -41,6 +42,7 @@ const getBaseMenuItems = (notifications: MenuNotifications) => [
   { icon: AlertTriangle, label: "Ocorrências", path: "/incidents", notifications: notifications.openIncidents },
   { icon: Fuel, label: "Abastecimento", path: "/fuel-management", notifications: 0 },
   { icon: Wrench, label: "Manutenção", path: "/maintenance-management", notifications: 0 },
+  { icon: BookOpen, label: "Documentação", path: "/documentation", notifications: 0 },
   { icon: Shield, label: "Logs de Auditoria", path: "/audit-logs", notifications: 0 }
 ];
 
