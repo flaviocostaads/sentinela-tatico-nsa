@@ -502,7 +502,7 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
         onComplete={handleOdometerComplete}
         vehiclePlate={selectedVehicleData?.vehiclePlate || 'N/A'}
         roundId={selectedRound?.id}
-        vehicleId={selectedVehicleData?.vehicleId || undefined}
+        vehicleId={selectedVehicleData?.vehicleId ?? undefined}
       />
     </div>
   );

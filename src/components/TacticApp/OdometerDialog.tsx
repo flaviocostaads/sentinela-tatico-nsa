@@ -203,32 +203,54 @@ const OdometerDialog = ({ open, onClose, onComplete, vehiclePlate, roundId, vehi
   };
 
   const handleComplete = async () => {
-    if (!canComplete() || !vehicleId) return;
+    if (!canComplete()) return;
     
     try {
       const odometerValue = parseInt(odometer);
       
-      // Validar odômetro usando a função RPC (cross-source validation)
-      const { data: validationData, error: validationError } = await supabase.rpc(
-        'validate_odometer_reading',
-        {
-          p_vehicle_id: vehicleId,
-          p_new_km: odometerValue
-        }
-      );
+      console.log("Starting odometer save:", {
+        odometerValue,
+        vehicleId,
+        lastOdometer,
+        roundId
+      });
+      
+      // Se não houver vehicleId, não validar odômetro
+      if (vehicleId) {
+        console.log("Validating odometer with RPC...");
+        // Validar odômetro usando a função RPC (cross-source validation)
+        const { data: validationData, error: validationError } = await supabase.rpc(
+          'validate_odometer_reading',
+          {
+            p_vehicle_id: vehicleId,
+            p_new_km: odometerValue
+          }
+        );
 
-      if (validationError) throw validationError;
-      
-      const validation = validationData as any;
-      
-      if (!validation.valid) {
-        toast({
-          title: "Odômetro inválido",
-          description: validation.message,
-          variant: "destructive",
-        });
-        return;
+        if (validationError) {
+          console.error("Validation RPC error:", validationError);
+          toast({
+            title: "Erro na validação",
+            description: `Erro ao validar odômetro: ${validationError.message}`,
+            variant: "destructive",
+          });
+          return;
+        }
+        
+        console.log("Validation result:", validationData);
+        const validation = validationData as any;
+        
+        if (!validation.valid) {
+          toast({
+            title: "Odômetro inválido",
+            description: validation.message,
+            variant: "destructive",
+          });
+          return;
+        }
       }
+      
+      console.log("Uploading photo to storage...");
       
       // Upload photo to storage
       const { data: { user } } = await supabase.auth.getUser();
@@ -242,16 +264,25 @@ const OdometerDialog = ({ open, onClose, onComplete, vehiclePlate, roundId, vehi
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `${user.id}/${timestamp}-odometer.jpg`;
       
+      console.log("Uploading to:", filename);
+      
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('odometer-photos')
         .upload(filename, blob);
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error("Upload error:", uploadError);
+        throw uploadError;
+      }
+
+      console.log("Photo uploaded successfully");
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('odometer-photos')
         .getPublicUrl(filename);
+
+      console.log("Creating odometer record...");
 
       // Create odometer record
       const { error: recordError } = await supabase
@@ -265,10 +296,16 @@ const OdometerDialog = ({ open, onClose, onComplete, vehiclePlate, roundId, vehi
           record_type: 'start'
         });
 
-      if (recordError) throw recordError;
+      if (recordError) {
+        console.error("Record creation error:", recordError);
+        throw recordError;
+      }
+
+      console.log("Odometer record created successfully");
 
       // Update vehicle's current odometer if vehicleId is provided
       if (vehicleId) {
+        console.log("Updating vehicle current odometer...");
         const { error: vehicleUpdateError } = await supabase
           .from('vehicles')
           .update({ current_odometer: odometerValue })
@@ -277,9 +314,12 @@ const OdometerDialog = ({ open, onClose, onComplete, vehiclePlate, roundId, vehi
         if (vehicleUpdateError) {
           console.error('Error updating vehicle odometer:', vehicleUpdateError);
           // Don't throw error here, just log it as the main operation succeeded
+        } else {
+          console.log("Vehicle odometer updated successfully");
         }
       }
 
+      console.log("Calling onComplete callback...");
       onComplete(odometerValue, photo!);
       
       // Reset form
@@ -291,11 +331,11 @@ const OdometerDialog = ({ open, onClose, onComplete, vehiclePlate, roundId, vehi
         title: "Registro salvo",
         description: "Foto e dados do odômetro salvos com sucesso",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving odometer record:", error);
       toast({
         title: "Erro",
-        description: "Erro ao salvar registro do odômetro",
+        description: error?.message || "Erro ao salvar registro do odômetro",
         variant: "destructive",
       });
     }
