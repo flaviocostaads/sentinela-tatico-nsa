@@ -86,6 +86,28 @@ const FuelDialog = ({ open, onOpenChange, vehicleId, roundId, currentOdometer }:
         return;
       }
 
+      // Validar odômetro usando a função RPC (cross-source validation)
+      const { data: validationData, error: validationError } = await supabase.rpc(
+        'validate_odometer_reading',
+        {
+          p_vehicle_id: fuelData.vehicle_id,
+          p_new_km: parseInt(fuelData.odometer_reading)
+        }
+      );
+
+      if (validationError) throw validationError;
+      
+      const validation = validationData as any;
+      
+      if (!validation.valid) {
+        toast({
+          title: "Erro de Validação",
+          description: validation.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
       const fuelLog = {
         vehicle_id: fuelData.vehicle_id,
         round_id: roundId || null,

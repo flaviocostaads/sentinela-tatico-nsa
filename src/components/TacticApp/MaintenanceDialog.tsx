@@ -116,6 +116,28 @@ const MaintenanceDialog = ({ open, onOpenChange, vehicleId, roundId, currentOdom
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
 
+      // Validar odômetro usando a função RPC (cross-source validation)
+      const { data: validationData, error: validationError } = await supabase.rpc(
+        'validate_odometer_reading',
+        {
+          p_vehicle_id: maintenanceData.vehicle_id,
+          p_new_km: maintenanceData.odometer_reading
+        }
+      );
+
+      if (validationError) throw validationError;
+      
+      const validation = validationData as any;
+      
+      if (!validation.valid) {
+        toast({
+          title: "Erro de Validação",
+          description: validation.message,
+          variant: "destructive",
+        });
+        return;
+      }
+
       const logData = {
         vehicle_id: maintenanceData.vehicle_id,
         round_id: roundId || null,

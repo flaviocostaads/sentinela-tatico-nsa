@@ -1117,7 +1117,20 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      vehicle_odometer_history: {
+        Row: {
+          km: number | null
+          km_diff: number | null
+          notes: string | null
+          previous_km: number | null
+          recorded_at: string | null
+          round_id: string | null
+          source: string | null
+          user_id: string | null
+          vehicle_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       check_admin_or_operator_role: {
@@ -1149,6 +1162,14 @@ export type Database = {
         }
         Returns: string
       }
+      get_last_vehicle_odometer: {
+        Args: { p_vehicle_id: string }
+        Returns: {
+          km: number
+          recorded_at: string
+          source: string
+        }[]
+      }
       has_admin_or_operator_role: {
         Args: { _user_id: string }
         Returns: boolean
@@ -1176,6 +1197,10 @@ export type Database = {
           p_user_name: string
         }
         Returns: string
+      }
+      validate_odometer_reading: {
+        Args: { p_new_km: number; p_vehicle_id: string }
+        Returns: Json
       }
     }
     Enums: {

@@ -21,6 +21,8 @@ const OdometerDialog = ({ open, onClose, onComplete, vehiclePlate, roundId, vehi
   const [photo, setPhoto] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [lastOdometer, setLastOdometer] = useState<number | null>(null);
+  const [lastOdometerSource, setLastOdometerSource] = useState<string>('');
+  const [validationError, setValidationError] = useState<string>('');
   const [isLoadingLastOdometer, setIsLoadingLastOdometer] = useState(false);
   const { toast } = useToast();
   
@@ -41,34 +43,21 @@ const OdometerDialog = ({ open, onClose, onComplete, vehiclePlate, roundId, vehi
       setIsLoadingLastOdometer(true);
       console.log("Fetching last odometer for vehicle:", vehicleId);
 
-      // Get the last odometer reading from odometer_records
-      const { data: lastRecord, error: recordError } = await supabase
-        .from('odometer_records')
-        .select('odometer_reading')
-        .eq('vehicle_id', vehicleId)
-        .order('recorded_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      // Usar a função RPC que busca o último odômetro de todas as fontes
+      const { data, error } = await supabase.rpc('get_last_vehicle_odometer', {
+        p_vehicle_id: vehicleId
+      });
 
-      if (recordError && recordError.code !== 'PGRST116') {
-        throw recordError;
-      }
-
-      if (lastRecord) {
-        setLastOdometer(lastRecord.odometer_reading);
-        console.log("Last odometer reading:", lastRecord.odometer_reading);
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        setLastOdometer(data[0].km);
+        setLastOdometerSource(data[0].source);
+        console.log("Last odometer:", data[0].km, "from", data[0].source);
       } else {
-        // If no records, get from vehicle's current_odometer
-        const { data: vehicleData, error: vehicleError } = await supabase
-          .from('vehicles')
-          .select('current_odometer')
-          .eq('id', vehicleId)
-          .single();
-
-        if (!vehicleError && vehicleData) {
-          setLastOdometer(vehicleData.current_odometer);
-          console.log("Vehicle current odometer:", vehicleData.current_odometer);
-        }
+        setLastOdometer(null);
+        setLastOdometerSource('');
+        console.log("No odometer records found");
       }
     } catch (error) {
       console.error("Error fetching last odometer:", error);
@@ -214,16 +203,28 @@ const OdometerDialog = ({ open, onClose, onComplete, vehiclePlate, roundId, vehi
   };
 
   const handleComplete = async () => {
-    if (!canComplete()) return;
+    if (!canComplete() || !vehicleId) return;
     
     try {
       const odometerValue = parseInt(odometer);
       
-      // Additional validation with user-friendly message
-      if (lastOdometer !== null && odometerValue <= lastOdometer) {
+      // Validar odômetro usando a função RPC (cross-source validation)
+      const { data: validationData, error: validationError } = await supabase.rpc(
+        'validate_odometer_reading',
+        {
+          p_vehicle_id: vehicleId,
+          p_new_km: odometerValue
+        }
+      );
+
+      if (validationError) throw validationError;
+      
+      const validation = validationData as any;
+      
+      if (!validation.valid) {
         toast({
           title: "Odômetro inválido",
-          description: `O odômetro deve ser maior que ${lastOdometer} km (última leitura)`,
+          description: validation.message,
           variant: "destructive",
         });
         return;
