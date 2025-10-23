@@ -12,7 +12,8 @@ import {
   Building2,
   Fuel,
   Wrench,
-  BookOpen
+  BookOpen,
+  Layers
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -37,6 +38,7 @@ const getBaseMenuItems = (notifications: MenuNotifications) => [
   { icon: Navigation, label: "Veículos", path: "/vehicles", notifications: 0 },
   { icon: MapPin, label: "Mapa de Rondas", path: "/map", notifications: 0 },
   { icon: Radio, label: "Rondas Ativas", path: "/rounds", notifications: notifications.activeRounds },
+  { icon: Layers, label: "Templates de Ronda", path: "/round-templates", notifications: 0 },
   { icon: Clock, label: "Histórico", path: "/history", notifications: 0 },
   { icon: FileText, label: "Relatórios", path: "/reports", notifications: 0 },
   { icon: AlertTriangle, label: "Ocorrências", path: "/incidents", notifications: notifications.openIncidents },

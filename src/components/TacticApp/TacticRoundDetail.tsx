@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import ChecklistDialog from "./ChecklistDialog";
 import RealTimeRoundMap from "./RealTimeRoundMap";
 import BaseControlDialog from "./BaseControlDialog";
+import SignaturePad from "./SignaturePad";
 
 interface TacticRoundDetailProps {
   roundId: string;
@@ -32,6 +33,7 @@ interface Checkpoint {
   visit_duration?: number;
   qr_code?: string;
   manual_code?: string;
+  required_signature?: boolean;
 }
 
 interface Round {
@@ -67,6 +69,9 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
   const [baseControlType, setBaseControlType] = useState<'departure' | 'arrival'>('departure');
   const [hasLeftBase, setHasLeftBase] = useState(false);
   const [canStartCheckpoints, setCanStartCheckpoints] = useState(false);
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const [signatureData, setSignatureData] = useState<string | null>(null);
+  const [checklistData, setChecklistData] = useState<{photo: string | null, observations: string, checklist: any[]} | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -180,7 +185,8 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
                 lng: checkpoint.lng,
                 geofence_radius: checkpoint.geofence_radius || 50,
                 qr_code: checkpoint.qr_code,
-                manual_code: checkpoint.manual_code
+                manual_code: checkpoint.manual_code,
+                required_signature: tc.required_signature || false
               });
             });
           } else {
@@ -195,7 +201,8 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
               lng: null,
               geofence_radius: 50,
               qr_code: `client_${tc.client_id}`,
-              manual_code: null
+              manual_code: null,
+              required_signature: tc.required_signature || false
             });
           }
         }
@@ -430,6 +437,54 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
   const handleChecklistComplete = async (photo: string | null, observations: string, checklist: any[]) => {
     if (!selectedCheckpoint) return;
 
+    // Check if signature is required
+    if (selectedCheckpoint.required_signature) {
+      // Store checklist data and show signature pad
+      setChecklistData({ photo, observations, checklist });
+      setChecklistDialogOpen(false);
+      setShowSignaturePad(true);
+      return;
+    }
+
+    // If no signature required, complete immediately
+    await completeCheckpointVisit(photo, observations, checklist, null);
+  };
+
+  const handleSignatureComplete = async (signature: string) => {
+    if (!checklistData) return;
+    
+    setSignatureData(signature);
+    setShowSignaturePad(false);
+    
+    await completeCheckpointVisit(
+      checklistData.photo, 
+      checklistData.observations, 
+      checklistData.checklist,
+      signature
+    );
+    
+    setChecklistData(null);
+    setSignatureData(null);
+  };
+
+  const handleSignatureCancel = () => {
+    setShowSignaturePad(false);
+    setChecklistDialogOpen(true);
+    toast({
+      title: "Assinatura cancelada",
+      description: "A assinatura é obrigatória para completar este checkpoint",
+      variant: "destructive",
+    });
+  };
+
+  const completeCheckpointVisit = async (
+    photo: string | null, 
+    observations: string, 
+    checklist: any[],
+    signature: string | null
+  ) => {
+    if (!selectedCheckpoint) return;
+
     try {
       const visitData = {
         round_id: roundId,
@@ -438,7 +493,8 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
         lat: currentLocation?.lat,
         lng: currentLocation?.lng,
         status: 'completed' as const,
-        duration: 60
+        duration: 60,
+        signature_data: signature
       };
 
       const { error } = await supabase
@@ -968,6 +1024,17 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
         roundId={roundId}
         onComplete={handleChecklistComplete}
       />
+
+      {/* Signature Pad Dialog */}
+      <Dialog open={showSignaturePad} onOpenChange={setShowSignaturePad}>
+        <DialogContent className="sm:max-w-md">
+          <SignaturePad
+            onSignature={handleSignatureComplete}
+            onCancel={handleSignatureCancel}
+            clientName={selectedCheckpoint?.name || ""}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

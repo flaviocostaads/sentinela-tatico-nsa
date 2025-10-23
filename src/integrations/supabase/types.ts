@@ -91,6 +91,7 @@ export type Database = {
           lat: number | null
           lng: number | null
           round_id: string
+          signature_data: string | null
           status: Database["public"]["Enums"]["checkpoint_status"]
           visit_time: string
         }
@@ -101,6 +102,7 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           round_id: string
+          signature_data?: string | null
           status?: Database["public"]["Enums"]["checkpoint_status"]
           visit_time?: string
         }
@@ -111,6 +113,7 @@ export type Database = {
           lat?: number | null
           lng?: number | null
           round_id?: string
+          signature_data?: string | null
           status?: Database["public"]["Enums"]["checkpoint_status"]
           visit_time?: string
         }
