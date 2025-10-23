@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Car, Bike, MapPin, Fuel, Calendar, Wrench, Edit, Trash2, ArrowLeft, TrendingUp, Activity } from "lucide-react";
+import { Car, Bike, MapPin, Fuel, Calendar, Wrench, Edit, Trash2, ArrowLeft, TrendingUp, Activity, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAuth } from "@/hooks/useAuth";
 // import { VehicleOdometerAnalysis } from "@/components/VehicleOdometerAnalysis";
 
 interface Vehicle {
@@ -69,6 +71,11 @@ const VehicleDetails = () => {
   const {
     toast
   } = useToast();
+  const { profile } = useAuth();
+  
+  // Check if user is admin or operador
+  const canEditOdometer = profile?.role === 'admin' || profile?.role === 'operador';
+  
   useEffect(() => {
     if (id) {
       fetchVehicleDetails();
@@ -145,6 +152,30 @@ const VehicleDetails = () => {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
 
+      // Validate odometer change
+      if (vehicle && editData.current_odometer < vehicle.current_odometer) {
+        if (!canEditOdometer) {
+          toast({
+            title: "Erro",
+            description: "Apenas administradores e operadores podem diminuir o odômetro do veículo.",
+            variant: "destructive"
+          });
+          return;
+        }
+        
+        // Confirm the action for admins/operators
+        const confirmed = window.confirm(
+          `ATENÇÃO: Você está diminuindo o odômetro de ${vehicle.current_odometer.toLocaleString()} km para ${editData.current_odometer.toLocaleString()} km.\n\n` +
+          `Esta ação deve ser usada apenas para corrigir erros de lançamento.\n\n` +
+          `Diferença: ${(vehicle.current_odometer - editData.current_odometer).toLocaleString()} km\n\n` +
+          `Deseja continuar?`
+        );
+        
+        if (!confirmed) {
+          return;
+        }
+      }
+
       // Update vehicle
       const {
         error
@@ -160,26 +191,37 @@ const VehicleDetails = () => {
 
       // Log odometer change if it was updated
       if (vehicle && vehicle.current_odometer !== editData.current_odometer) {
+        const odometerDiff = editData.current_odometer - vehicle.current_odometer;
+        const actionDescription = odometerDiff < 0 
+          ? `AJUSTE DE ODÔMETRO (REDUÇÃO): ${Math.abs(odometerDiff)} km` 
+          : `Atualização de odômetro: +${odometerDiff} km`;
+        
         const {
           error: logError
         } = await supabase.from("audit_logs").insert({
           user_id: user.id,
-          user_name: user.email || "",
-          action: "UPDATE",
+          user_name: profile?.name || user.email || "",
+          action: odometerDiff < 0 ? "ODOMETER_ADJUSTMENT" : "UPDATE_ODOMETER",
           table_name: "vehicles",
           record_id: id,
           old_values: {
-            current_odometer: vehicle.current_odometer
+            current_odometer: vehicle.current_odometer,
+            license_plate: vehicle.license_plate
           },
           new_values: {
-            current_odometer: editData.current_odometer
+            current_odometer: editData.current_odometer,
+            difference: odometerDiff,
+            description: actionDescription
           }
         });
         if (logError) console.error("Error logging odometer change:", logError);
       }
+      
       toast({
         title: "Sucesso",
-        description: "Veículo atualizado com sucesso!"
+        description: vehicle && editData.current_odometer < vehicle.current_odometer 
+          ? "Odômetro ajustado com sucesso! Esta ação foi registrada no log de auditoria."
+          : "Veículo atualizado com sucesso!"
       });
       setEditDialogOpen(false);
       fetchVehicleDetails();
@@ -614,12 +656,64 @@ const VehicleDetails = () => {
                   fuel_capacity: parseFloat(e.target.value)
                 })} />
                 </div>
+                
+                {/* Campo de Odômetro com Validação Especial */}
                 <div className="space-y-2">
-                  <Label htmlFor="current_odometer">Odômetro Atual (km)</Label>
-                  <Input id="current_odometer" type="number" value={editData.current_odometer} onChange={e => setEditData({
-                  ...editData,
-                  current_odometer: parseInt(e.target.value)
-                })} />
+                  <Label htmlFor="current_odometer" className="flex items-center gap-2">
+                    Odômetro Atual (km)
+                    {canEditOdometer && (
+                      <Badge variant="outline" className="text-xs bg-tactical-amber/10 text-tactical-amber border-tactical-amber">
+                        Admin/Operador
+                      </Badge>
+                    )}
+                  </Label>
+                  <Input 
+                    id="current_odometer" 
+                    type="number" 
+                    value={editData.current_odometer} 
+                    onChange={e => setEditData({
+                      ...editData,
+                      current_odometer: parseInt(e.target.value) || 0
+                    })} 
+                    className={
+                      vehicle && editData.current_odometer < vehicle.current_odometer
+                        ? "border-tactical-amber"
+                        : ""
+                    }
+                  />
+                  <div className="text-xs text-muted-foreground">
+                    Valor atual no sistema: <span className="font-medium">{vehicle?.current_odometer.toLocaleString()} km</span>
+                  </div>
+                  
+                  {/* Aviso quando o valor é menor */}
+                  {vehicle && editData.current_odometer < vehicle.current_odometer && (
+                    <Alert className={canEditOdometer ? "border-tactical-amber bg-tactical-amber/5" : "border-destructive bg-destructive/5"}>
+                      <AlertTriangle className={`h-4 w-4 ${canEditOdometer ? "text-tactical-amber" : "text-destructive"}`} />
+                      <AlertDescription className="text-xs">
+                        {canEditOdometer ? (
+                          <>
+                            <strong>Atenção:</strong> Você está diminuindo o odômetro em{" "}
+                            <strong>{(vehicle.current_odometer - editData.current_odometer).toLocaleString()} km</strong>.
+                            <br />
+                            Esta ação deve ser usada apenas para corrigir erros de lançamento e será registrada no log de auditoria.
+                          </>
+                        ) : (
+                          <>
+                            <strong>Não permitido:</strong> Apenas administradores e operadores podem diminuir o odômetro do veículo.
+                            <br />
+                            Esta função existe para corrigir erros de lançamento.
+                          </>
+                        )}
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                  
+                  {/* Informação quando o valor aumenta normalmente */}
+                  {vehicle && editData.current_odometer > vehicle.current_odometer && (
+                    <div className="text-xs text-tactical-green">
+                      ✓ Aumento de {(editData.current_odometer - vehicle.current_odometer).toLocaleString()} km
+                    </div>
+                  )}
                 </div>
                 <div className="flex space-x-2">
                   <Button onClick={handleEdit} className="flex-1 bg-tactical-green hover:bg-tactical-green/90">
