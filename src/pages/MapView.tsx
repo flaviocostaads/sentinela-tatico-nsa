@@ -269,37 +269,14 @@ const MapViewPage = () => {
 
           {expanded && (
             <div className="fixed inset-0 z-50 bg-background">
-              <div className="flex items-center justify-between p-3 border-b bg-card">
-                <div className="flex items-center gap-2 text-card-foreground">
-                  <Navigation className="w-5 h-5" />
-                  <span className="font-medium">Monitoramento em Tempo Real</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      const url = window.location.href;
-                      window.open(url, '_blank', 'width=1200,height=800');
-                      setExpanded(false);
-                    }}
-                    className="border-tactical-blue text-tactical-blue hover:bg-tactical-blue hover:text-white"
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" /> Abrir em Nova Janela
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setExpanded(false)}
-                    className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                  >
-                    <X className="w-4 h-4 mr-2" /> Fechar
-                  </Button>
-                </div>
-              </div>
-              <div className="w-full h-[calc(100vh-56px)]">
-                <RealtimeMap isExpanded={true} />
-              </div>
+              <RealtimeMap 
+                isExpanded={true} 
+                onClose={() => setExpanded(false)}
+                onOpenNewWindow={() => {
+                  const url = window.location.href;
+                  window.open(url, '_blank', 'width=1200,height=800');
+                }}
+              />
             </div>
           )}
         </main>

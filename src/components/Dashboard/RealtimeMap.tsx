@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Navigation, User, X, RotateCcw, Search } from "lucide-react";
+import { Navigation, User, X, RotateCcw, Search, ExternalLink } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -55,9 +55,11 @@ interface EmergencyIncident {
 
 interface RealtimeMapProps {
   isExpanded?: boolean;
+  onClose?: () => void;
+  onOpenNewWindow?: () => void;
 }
 
-const RealtimeMap = ({ isExpanded = false }: RealtimeMapProps) => {
+const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow }: RealtimeMapProps) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const userMarkers = useRef<{ [key: string]: mapboxgl.Marker }>({});
@@ -896,39 +898,72 @@ const RealtimeMap = ({ isExpanded = false }: RealtimeMapProps) => {
       <div className="w-full h-full bg-background">
         {/* Header with Search Bar */}
         <div className="flex items-center justify-between gap-4 p-4 border-b bg-card">
-          <div className="flex-1 flex items-center gap-2">
-            <Search className="w-4 h-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Buscar empresa por nome..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              className="max-w-md"
-            />
+          <div className="flex items-center gap-3">
+            <Navigation className="w-5 h-5 text-card-foreground" />
+            <span className="font-semibold text-card-foreground whitespace-nowrap">Monitoramento em Tempo Real</span>
+          </div>
+          
+          {/* Search Bar */}
+          <div className="flex items-center gap-2 flex-1 max-w-md">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Buscar empresa..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                className="pl-10"
+              />
+            </div>
             <Button onClick={handleSearch} variant="default" size="sm">
-              Localizar
+              <Search className="w-4 h-4" />
             </Button>
           </div>
+          
+          {/* Status Badges */}
           <div className="flex items-center gap-2">
-            <Badge variant="secondary" className="text-xs">
-              {clients.length} clientes • {userLocations.length} táticos • {roundCheckpoints.length} pontos
+            <Badge variant="secondary" className="text-xs whitespace-nowrap">
+              {clients.length} clientes • {userLocations.length} táticos
             </Badge>
             {hasActiveAlert && (
               <Badge variant="destructive" className="animate-pulse text-xs">
-                🚨 {activeEmergencies.length} EMERGÊNCIA(S)
+                🚨 {activeEmergencies.length}
               </Badge>
             )}
             <Badge 
               variant={isAutoUpdating ? "default" : "secondary"} 
-              className="flex items-center gap-2 text-xs"
+              className="flex items-center gap-1 text-xs"
             >
               <div className={`w-2 h-2 rounded-full ${isAutoUpdating ? 'bg-tactical-green animate-pulse' : 'bg-gray-400'}`}></div>
-              {isAutoUpdating ? 'Auto-Atualização' : 'Desconectado'}
+              <span className="hidden lg:inline">{isAutoUpdating ? 'Auto' : 'Off'}</span>
             </Badge>
-            <div className="text-xs text-muted-foreground">
-              {lastUpdateTime.toLocaleTimeString('pt-BR')}
-            </div>
+          </div>
+          
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            {onOpenNewWindow && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onOpenNewWindow}
+                className="border-tactical-blue text-tactical-blue hover:bg-tactical-blue hover:text-white"
+                title="Abrir em Nova Janela"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </Button>
+            )}
+            {onClose && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onClose}
+                className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                title="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            )}
           </div>
         </div>
         
