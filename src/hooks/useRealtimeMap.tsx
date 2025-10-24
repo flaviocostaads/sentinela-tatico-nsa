@@ -112,12 +112,12 @@ export const useRealtimeMap = () => {
       // Initial data fetch
       fetchAllData();
 
-      // Auto-refresh every 15 seconds as backup
+      // Auto-refresh every 2 seconds as backup
       const autoRefreshInterval = setInterval(() => {
         console.log('🔄 Auto-refresh triggered');
         fetchAllData();
         setLastUpdateTime(new Date());
-      }, 15000);
+      }, 2000);
 
       setIsAutoUpdating(true);
 

@@ -242,7 +242,10 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
   const updateClientMarkers = async () => {
     if (!map.current || !map.current.getContainer()) return;
 
-    // Clear existing client markers
+    console.log('🏢 Updating client markers, current count:', clients.length);
+    console.log('🏢 Current clientMarkers count before clear:', clientMarkers.current.length);
+
+    // CRITICAL: Clear ALL existing client markers first
     clientMarkers.current.forEach(marker => {
       if (marker) {
         try {
@@ -253,6 +256,8 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       }
     });
     clientMarkers.current = [];
+
+    console.log('🏢 Client markers cleared, now adding new markers');
 
     // Get active rounds to determine which clients are in templates
     const activeRounds = userLocations.map(loc => loc.rounds).filter(Boolean);
@@ -395,7 +400,10 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
   const updateUserLocations = () => {
     if (!map.current || !map.current.getContainer()) return;
 
-    // Remove existing markers
+    console.log('🗺️ Updating user locations, current count:', userLocations.length);
+    console.log('🗺️ Current userMarkers count before clear:', Object.keys(userMarkers.current).length);
+
+    // CRITICAL: Remove ALL existing markers first
     Object.values(userMarkers.current).forEach(marker => {
       if (marker) {
         try {
@@ -406,6 +414,8 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       }
     });
     userMarkers.current = {};
+
+    console.log('🗺️ Markers cleared, now adding new markers');
 
     // Add new markers for tactical users
     userLocations.forEach((location) => {
@@ -802,7 +812,10 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
   const updateRoundCheckpoints = () => {
     if (!map.current || !map.current.getContainer()) return;
 
-    // Remove existing checkpoint markers
+    console.log('📍 Updating checkpoint markers, current count:', roundCheckpoints.length);
+    console.log('📍 Current checkpointMarkers count before clear:', checkpointMarkers.current.length);
+
+    // CRITICAL: Remove ALL existing checkpoint markers first
     checkpointMarkers.current.forEach(marker => {
       if (marker) {
         try {
@@ -813,6 +826,8 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       }
     });
     checkpointMarkers.current = [];
+
+    console.log('📍 Checkpoint markers cleared, now adding new markers');
 
     // Add checkpoint markers
     roundCheckpoints.forEach(checkpoint => {
