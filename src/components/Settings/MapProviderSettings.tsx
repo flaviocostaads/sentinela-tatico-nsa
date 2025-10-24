@@ -9,9 +9,10 @@ import { useMapProvider, MapProvider } from '@/hooks/useMapProvider';
 import { InfoIcon, MapPin, Navigation, Eye, EyeOff } from 'lucide-react';
 
 const MapProviderSettings = () => {
-  const { provider, googleMapsApiKey, loading, updateMapProvider } = useMapProvider();
+  const { provider, googleMapsApiKey, defaultCity, loading, updateMapProvider } = useMapProvider();
   const [selectedProvider, setSelectedProvider] = useState<MapProvider>('mapbox');
   const [apiKey, setApiKey] = useState('');
+  const [city, setCity] = useState('São Paulo, SP, Brasil');
   const [saving, setSaving] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
 
@@ -19,13 +20,18 @@ const MapProviderSettings = () => {
     if (!loading) {
       setSelectedProvider(provider);
       setApiKey(googleMapsApiKey || '');
+      setCity(defaultCity || 'São Paulo, SP, Brasil');
     }
-  }, [provider, googleMapsApiKey, loading]);
+  }, [provider, googleMapsApiKey, defaultCity, loading]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await updateMapProvider(selectedProvider, selectedProvider === 'google' ? apiKey : undefined);
+      await updateMapProvider(
+        selectedProvider, 
+        selectedProvider === 'google' ? apiKey : undefined,
+        city
+      );
     } finally {
       setSaving(false);
     }
@@ -91,6 +97,21 @@ const MapProviderSettings = () => {
               </Label>
             </div>
           </RadioGroup>
+        </div>
+
+        <div className="space-y-4">
+          <Label htmlFor="default-city">Cidade Padrão para Centralização do Mapa</Label>
+          <Input
+            id="default-city"
+            type="text"
+            placeholder="Ex: São Paulo, SP, Brasil"
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Digite o nome da cidade que será usada como centro padrão do mapa. 
+            Exemplo: "São Paulo, SP, Brasil" ou "Rio de Janeiro, RJ, Brasil"
+          </p>
         </div>
 
         {selectedProvider === 'google' && (

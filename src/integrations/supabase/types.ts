@@ -228,6 +228,7 @@ export type Database = {
           address: string | null
           company_name: string | null
           created_at: string
+          default_city: string | null
           description: string | null
           email: string | null
           favicon_url: string | null
@@ -246,6 +247,7 @@ export type Database = {
           address?: string | null
           company_name?: string | null
           created_at?: string
+          default_city?: string | null
           description?: string | null
           email?: string | null
           favicon_url?: string | null
@@ -264,6 +266,7 @@ export type Database = {
           address?: string | null
           company_name?: string | null
           created_at?: string
+          default_city?: string | null
           description?: string | null
           email?: string | null
           favicon_url?: string | null

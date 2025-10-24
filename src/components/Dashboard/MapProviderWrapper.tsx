@@ -11,7 +11,7 @@ interface MapProviderWrapperProps {
 }
 
 const MapProviderWrapper = (props: MapProviderWrapperProps) => {
-  const { provider, googleMapsApiKey, loading } = useMapProvider();
+  const { provider, googleMapsApiKey, defaultCity, loading } = useMapProvider();
 
   if (loading) {
     return (
@@ -34,10 +34,10 @@ const MapProviderWrapper = (props: MapProviderWrapperProps) => {
       );
     }
 
-    return <GoogleRealtimeMap apiKey={googleMapsApiKey} {...props} />;
+    return <GoogleRealtimeMap apiKey={googleMapsApiKey} defaultCity={defaultCity} {...props} />;
   }
 
-  return <RealtimeMap {...props} />;
+  return <RealtimeMap defaultCity={defaultCity} {...props} />;
 };
 
 export default MapProviderWrapper;

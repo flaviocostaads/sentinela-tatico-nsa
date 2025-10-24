@@ -20,17 +20,60 @@ const defaultCenter = {
 
 interface GoogleRealtimeMapProps {
   apiKey: string;
+  defaultCity?: string;
   isExpanded?: boolean;
   onClose?: () => void;
   onOpenNewWindow?: () => void;
 }
 
-const GoogleRealtimeMap = ({ apiKey, isExpanded = false, onClose, onOpenNewWindow }: GoogleRealtimeMapProps) => {
+const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isExpanded = false, onClose, onOpenNewWindow }: GoogleRealtimeMapProps) => {
   const mapRef = useRef<google.maps.Map | null>(null);
   const [selectedMarker, setSelectedMarker] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [mapCenter, setMapCenter] = useState(defaultCenter);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const { userLocations, clients, activeEmergencies, lastUpdateTime, fetchAllData } = useRealtimeMap();
   const { toast } = useToast();
+
+  // Geocode the default city on mount
+  useEffect(() => {
+    if (defaultCity && window.google?.maps) {
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ address: defaultCity }, (results, status) => {
+        if (status === 'OK' && results && results[0]) {
+          const location = results[0].geometry.location;
+          setMapCenter({
+            lat: location.lat(),
+            lng: location.lng(),
+          });
+        }
+      });
+    }
+  }, [defaultCity]);
+
+  const toggleFullscreen = () => {
+    const mapElement = document.getElementById('google-realtime-map-container');
+    if (!mapElement) return;
+
+    if (!isFullscreen) {
+      if (mapElement.requestFullscreen) {
+        mapElement.requestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   const handleSearch = () => {
     if (!searchQuery.trim()) {
@@ -69,7 +112,7 @@ const GoogleRealtimeMap = ({ apiKey, isExpanded = false, onClose, onOpenNewWindo
     <div className="h-full relative">
       <GoogleMap
         mapContainerStyle={mapContainerStyle}
-        center={defaultCenter}
+        center={mapCenter}
         zoom={12}
         onLoad={(map) => { mapRef.current = map; }}
         options={{
@@ -175,9 +218,12 @@ const GoogleRealtimeMap = ({ apiKey, isExpanded = false, onClose, onOpenNewWindo
     </div>
   );
 
-  if (isExpanded) {
+  if (isExpanded || isFullscreen) {
     return (
-      <div className="fixed inset-0 bg-background z-50 flex flex-col">
+      <div 
+        id="google-realtime-map-container"
+        className="fixed inset-0 z-50 bg-background flex flex-col"
+      >
         <div className="flex items-center justify-between p-4 border-b bg-background">
           <div className="flex items-center gap-4 flex-1">
             <h2 className="text-xl font-bold">Mapa em Tempo Real - Google Maps</h2>
@@ -199,16 +245,28 @@ const GoogleRealtimeMap = ({ apiKey, isExpanded = false, onClose, onOpenNewWindo
               <RefreshCw className="w-4 h-4 mr-1" />
               Atualizar
             </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={toggleFullscreen}
+            >
+              <Maximize2 className="w-4 h-4 mr-1" />
+              Tela Cheia
+            </Button>
             {onOpenNewWindow && (
               <Button variant="outline" size="sm" onClick={onOpenNewWindow}>
                 <ExternalLink className="w-4 h-4 mr-1" />
                 Abrir em Nova Janela
               </Button>
             )}
-            {onClose && (
-              <Button variant="outline" size="sm" onClick={onClose}>
+            {(onClose || isFullscreen) && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={isFullscreen ? toggleFullscreen : onClose}
+              >
                 <X className="w-4 h-4 mr-1" />
-                Fechar
+                {isFullscreen ? 'Sair da Tela Cheia' : 'Fechar'}
               </Button>
             )}
           </div>
@@ -244,6 +302,13 @@ const GoogleRealtimeMap = ({ apiKey, isExpanded = false, onClose, onOpenNewWindo
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={fetchAllData}>
             <RefreshCw className="w-4 h-4" />
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={toggleFullscreen}
+          >
+            <Maximize2 className="w-4 h-4" />
           </Button>
         </div>
       </CardHeader>

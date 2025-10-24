@@ -7,11 +7,13 @@ export type MapProvider = 'mapbox' | 'google';
 interface MapProviderConfig {
   provider: MapProvider;
   googleMapsApiKey?: string;
+  defaultCity?: string;
 }
 
 export const useMapProvider = () => {
   const [provider, setProvider] = useState<MapProvider>('mapbox');
   const [googleMapsApiKey, setGoogleMapsApiKey] = useState<string>('');
+  const [defaultCity, setDefaultCity] = useState<string>('São Paulo, SP, Brasil');
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -25,7 +27,7 @@ export const useMapProvider = () => {
       
       const { data, error } = await supabase
         .from('company_settings')
-        .select('id, map_provider, google_maps_api_key')
+        .select('id, map_provider, google_maps_api_key, default_city')
         .limit(1)
         .maybeSingle();
 
@@ -37,6 +39,7 @@ export const useMapProvider = () => {
       if (data) {
         setProvider((data.map_provider as MapProvider) || 'mapbox');
         setGoogleMapsApiKey(data.google_maps_api_key || '');
+        setDefaultCity(data.default_city || 'São Paulo, SP, Brasil');
       }
     } catch (err) {
       console.error('Error:', err);
@@ -45,7 +48,7 @@ export const useMapProvider = () => {
     }
   };
 
-  const updateMapProvider = async (newProvider: MapProvider, apiKey?: string) => {
+  const updateMapProvider = async (newProvider: MapProvider, apiKey?: string, city?: string) => {
     try {
       // Get the first company_settings record
       const { data: settings, error: fetchError } = await supabase
@@ -64,7 +67,8 @@ export const useMapProvider = () => {
           .from('company_settings')
           .insert({
             map_provider: newProvider,
-            ...(apiKey && { google_maps_api_key: apiKey })
+            ...(apiKey && { google_maps_api_key: apiKey }),
+            ...(city && { default_city: city })
           })
           .select('id')
           .single();
@@ -78,7 +82,8 @@ export const useMapProvider = () => {
           .from('company_settings')
           .update({
             map_provider: newProvider,
-            ...(apiKey && { google_maps_api_key: apiKey })
+            ...(apiKey && { google_maps_api_key: apiKey }),
+            ...(city && { default_city: city })
           })
           .eq('id', settingsId);
 
@@ -87,6 +92,7 @@ export const useMapProvider = () => {
 
       setProvider(newProvider);
       if (apiKey) setGoogleMapsApiKey(apiKey);
+      if (city) setDefaultCity(city);
 
       toast({
         title: "Provedor de mapa atualizado",
@@ -108,6 +114,7 @@ export const useMapProvider = () => {
   return {
     provider,
     googleMapsApiKey,
+    defaultCity,
     loading,
     updateMapProvider,
     refreshConfig: fetchMapProviderConfig,

@@ -57,9 +57,10 @@ interface RealtimeMapProps {
   isExpanded?: boolean;
   onClose?: () => void;
   onOpenNewWindow?: () => void;
+  defaultCity?: string;
 }
 
-const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow }: RealtimeMapProps) => {
+const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, defaultCity = 'São Paulo, SP, Brasil' }: RealtimeMapProps) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const userMarkers = useRef<{ [key: string]: mapboxgl.Marker }>({});
@@ -193,16 +194,34 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow }: RealtimeM
     };
   }, [userLocations]); // Re-create subscription when userLocations change
 
-  const initializeMap = () => {
+  const initializeMap = async () => {
     if (!mapContainer.current || map.current) return;
 
     try {
       mapboxgl.accessToken = mapboxToken;
 
+      // Geocode default city if provided
+      let centerCoords: [number, number] = [-48.3336, -10.1849]; // Default: Palmas - TO
+      
+      if (defaultCity) {
+        try {
+          const geocodeUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(defaultCity)}.json?access_token=${mapboxToken}&limit=1`;
+          const response = await fetch(geocodeUrl);
+          const data = await response.json();
+          
+          if (data.features && data.features.length > 0) {
+            centerCoords = data.features[0].center;
+            console.log(`📍 Geocoded ${defaultCity} to:`, centerCoords);
+          }
+        } catch (geocodeError) {
+          console.warn('Error geocoding city, using default:', geocodeError);
+        }
+      }
+
       map.current = new mapboxgl.Map({
         container: mapContainer.current,
         style: 'mapbox://styles/mapbox/streets-v11',
-        center: [-48.3336, -10.1849], // Palmas - TO coordinates
+        center: centerCoords,
         zoom: 12,
       });
 
