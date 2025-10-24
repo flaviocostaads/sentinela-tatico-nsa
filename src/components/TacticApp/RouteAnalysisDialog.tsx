@@ -30,6 +30,8 @@ import {
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface Checkpoint {
   id: string;
@@ -41,33 +43,127 @@ interface Checkpoint {
 interface RouteAnalysisDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  checkpoints: Checkpoint[];
+  roundId?: string;
+  checkpoints?: Checkpoint[];
   vehicleType: 'car' | 'motorcycle' | 'on_foot';
   roundName?: string;
 }
 
-export const RouteAnalysisDialog = ({
+const RouteAnalysisDialog = ({
   open,
   onOpenChange,
-  checkpoints,
+  roundId,
+  checkpoints: providedCheckpoints,
   vehicleType,
   roundName
 }: RouteAnalysisDialogProps) => {
   const { 
     calculateRoundDistance, 
     calculateRoundCost,
-    loading 
+    loading: apiLoading
   } = useMapboxDirections();
   
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [checkpoints, setCheckpoints] = useState<Checkpoint[]>(providedCheckpoints || []);
   const [routeData, setRouteData] = useState<any>(null);
   const [costData, setCostData] = useState<any>(null);
   const [operationalCost, setOperationalCost] = useState<any>(null);
 
   useEffect(() => {
-    if (open && checkpoints.length >= 2) {
+    if (open && roundId && !providedCheckpoints) {
+      fetchCheckpoints();
+    } else if (open && checkpoints.length >= 2) {
       analyzeRoute();
     }
-  }, [open, checkpoints]);
+  }, [open, roundId]);
+
+  const fetchCheckpoints = async () => {
+    if (!roundId) return;
+    
+    setLoading(true);
+    try {
+      // Get round details to determine if it's template-based
+      const { data: round, error: roundError } = await supabase
+        .from('rounds')
+        .select('template_id, client_id')
+        .eq('id', roundId)
+        .single();
+
+      if (roundError) throw roundError;
+
+      let checkpointsData: Checkpoint[] = [];
+
+      if (round.template_id) {
+        // Template-based round - get checkpoints from template
+        const { data: templateCheckpoints, error: templateError } = await supabase
+          .from('round_template_checkpoints')
+          .select('template_id, client_id, order_index')
+          .eq('template_id', round.template_id)
+          .order('order_index');
+
+        if (templateError) throw templateError;
+
+        // Get client IDs from template
+        const clientIds = templateCheckpoints.map((tc: any) => tc.client_id);
+
+        // Get checkpoints for these clients
+        const { data: clientCheckpoints, error: checkpointsError } = await supabase
+          .from('checkpoints')
+          .select('id, name, client_id, lat, lng')
+          .in('client_id', clientIds)
+          .eq('active', true)
+          .order('client_id, order_index');
+
+        if (checkpointsError) throw checkpointsError;
+
+        // Map template order to checkpoints
+        checkpointsData = clientCheckpoints.map((cp: any) => ({
+          id: cp.id,
+          name: cp.name,
+          latitude: cp.lat,
+          longitude: cp.lng
+        }));
+      } else {
+        // Custom round - get client location
+        const { data: client, error: clientError } = await supabase
+          .from('clients')
+          .select('id, name, lat, lng')
+          .eq('id', round.client_id)
+          .single();
+
+        if (clientError) throw clientError;
+
+        checkpointsData = [{
+          id: client.id,
+          name: client.name,
+          latitude: client.lat,
+          longitude: client.lng
+        }];
+      }
+
+      setCheckpoints(checkpointsData);
+      
+      if (checkpointsData.length >= 2) {
+        await analyzeRoute();
+      } else {
+        toast({
+          title: "Aviso",
+          description: "Ronda possui menos de 2 pontos. Análise não disponível.",
+          variant: "default",
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching checkpoints:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar pontos da ronda",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const analyzeRoute = async () => {
     const profile = getMapboxProfile(vehicleType);
@@ -132,7 +228,7 @@ export const RouteAnalysisDialog = ({
         </DialogHeader>
 
         <ScrollArea className="max-h-[calc(90vh-150px)]">
-          {loading ? (
+          {(loading || apiLoading) ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <span className="ml-2">Calculando rota...</span>
@@ -304,8 +400,8 @@ export const RouteAnalysisDialog = ({
             Fechar
           </Button>
           {routeData && (
-            <Button onClick={analyzeRoute} disabled={loading}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            <Button onClick={analyzeRoute} disabled={loading || apiLoading}>
+              {(loading || apiLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Recalcular
             </Button>
           )}
@@ -314,3 +410,5 @@ export const RouteAnalysisDialog = ({
     </Dialog>
   );
 };
+
+export default RouteAnalysisDialog;

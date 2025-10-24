@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Navigation, Clock, MapPin, Play, CheckCircle, AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Navigation, Clock, MapPin, Play, CheckCircle, AlertTriangle, Plus, Trash2, Route } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import CreateRoundDialog from "./CreateRoundDialog";
 import OdometerDialog from "./OdometerDialog";
 import RoundCompaniesProgress from "./RoundCompaniesProgress";
 import VehicleSelectionDialog from "./VehicleSelectionDialog";
+import RouteAnalysisDialog from './RouteAnalysisDialog';
 
 interface TacticRoundsProps {
   onBack: () => void;
@@ -52,6 +53,8 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
     vehiclePlate?: string;
   } | null>(null);
   const [showCheckpointsList, setShowCheckpointsList] = useState(false);
+  const [showRouteAnalysis, setShowRouteAnalysis] = useState(false);
+  const [routeAnalysisRound, setRouteAnalysisRound] = useState<Round | null>(null);
   const { user } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const { toast } = useToast();
@@ -283,6 +286,11 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
     setSelectedRound(null);
   };
 
+  const handleAnalyzeRoute = async (round: Round) => {
+    setRouteAnalysisRound(round);
+    setShowRouteAnalysis(true);
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'active': return <Navigation className="w-4 h-4" />;
@@ -404,53 +412,69 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
               </div>
 
                 {/* Action Buttons - Show appropriate actions based on user role */}
-                <div className="flex space-x-2">
-                  {round.status === 'pending' && (
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleStartRound(round);
-                      }}
-                      className="bg-green-600 hover:bg-green-700 text-white flex-1"
-                      size="sm"
-                    >
-                      <Play className="w-4 h-4 mr-2" />
-                      Iniciar Ronda
-                    </Button>
-                  )}
+                <div className="space-y-2">
+                  <div className="flex space-x-2">
+                    {round.status === 'pending' && (
+                      <>
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleStartRound(round);
+                          }}
+                          className="bg-green-600 hover:bg-green-700 text-white flex-1"
+                          size="sm"
+                        >
+                          <Play className="w-4 h-4 mr-2" />
+                          Iniciar Ronda
+                        </Button>
+                        
+                        {round.template_id && (
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAnalyzeRoute(round);
+                            }}
+                            variant="outline"
+                            size="sm"
+                            className="px-3"
+                          >
+                            <Route className="w-4 h-4" />
+                          </Button>
+                        )}
+                      </>
+                    )}
+                    
+                    {round.status !== 'pending' && (
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedRound(round);
+                          setShowCheckpointsList(true);
+                        }}
+                        className="bg-tactical-blue hover:bg-tactical-blue/90 text-white flex-1"
+                        size="sm"
+                      >
+                        Ver Detalhes
+                      </Button>
+                    )}
+                    
+                    {/* Delete button for admins */}
+                    {isAdmin && (
+                      <Button
+                        onClick={(e) => handleDeleteRound(round, e)}
+                        variant="destructive"
+                        size="sm"
+                        className="px-3"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
                   
-                  {round.status !== 'pending' && (
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedRound(round);
-                        setShowCheckpointsList(true);
-                      }}
-                      className="bg-tactical-blue hover:bg-tactical-blue/90 text-white flex-1"
-                      size="sm"
-                    >
-                      Ver Detalhes
-                    </Button>
-                  )}
-                  
-                  {/* Delete button for admins */}
-                  {isAdmin && (
-                    <Button
-                      onClick={(e) => handleDeleteRound(round, e)}
-                      variant="destructive"
-                      size="sm"
-                      className="px-3"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  )}
-                  
-                  {round.status === 'pending' && !isAdmin && (
-                    <div className="flex-1">
-                      <p className="text-xs text-muted-foreground text-center py-2">
-                        Complete o odômetro para ver detalhes
-                      </p>
-                    </div>
+                  {round.status === 'pending' && !isAdmin && !round.template_id && (
+                    <p className="text-xs text-muted-foreground text-center py-1">
+                      Complete o odômetro para ver detalhes
+                    </p>
                   )}
                 </div>
             </div>
@@ -490,6 +514,16 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
         }}
         onVehicleSelected={handleVehicleSelected}
       />
+
+      {/* Route Analysis Dialog */}
+      {routeAnalysisRound && (
+        <RouteAnalysisDialog
+          open={showRouteAnalysis}
+          onOpenChange={setShowRouteAnalysis}
+          roundId={routeAnalysisRound.id}
+          vehicleType="car"
+        />
+      )}
 
       {/* Odometer Dialog */}
       <OdometerDialog
