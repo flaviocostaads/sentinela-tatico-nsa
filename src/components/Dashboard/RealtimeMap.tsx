@@ -124,28 +124,46 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
     };
   }, []);
 
-  // Update map when locations change
+  // Unified map update effect with debounce to prevent duplicate markers
   useEffect(() => {
-    if (map.current) {
-      updateUserLocations();
-      updateClientMarkers();
-    }
-  }, [userLocations, clients, highlightedMarker]);
+    if (!map.current) return;
 
-  // Update checkpoints when user locations change (they contain active rounds)
-  useEffect(() => {
-    if (map.current && userLocations.length > 0) {
+    console.log('🔄 Map update triggered');
+    console.log('  - userLocations:', userLocations.length);
+    console.log('  - clients:', clients.length);
+    console.log('  - roundCheckpoints:', roundCheckpoints.length);
+
+    // Use a small delay to batch updates and prevent duplicates
+    const updateTimer = setTimeout(() => {
+      console.log('📍 Executing unified map update');
+      
+      // 1. Update tactical user locations (always first)
+      updateUserLocations();
+      
+      // 2. Fetch checkpoints for active rounds
       const activeRounds = userLocations.map(loc => loc.rounds).filter(Boolean);
       if (activeRounds.length > 0) {
         fetchRoundCheckpoints(activeRounds);
+      } else {
+        // Clear checkpoint markers if no active rounds
+        setRoundCheckpoints([]);
       }
-    }
-  }, [userLocations]);
+      
+      // 3. Update client markers (empresas) - SEMPRE VISÍVEIS
+      updateClientMarkers();
+    }, 100);
 
-  // Update map when checkpoints change
+    return () => clearTimeout(updateTimer);
+  }, [userLocations, clients, highlightedMarker]);
+
+  // Separate effect for checkpoint markers only (triggered by data change)
   useEffect(() => {
-    if (map.current && roundCheckpoints.length > 0) {
-      updateRoundCheckpoints();
+    if (map.current && roundCheckpoints.length >= 0) {
+      // Small delay to ensure client markers are updated first
+      const timer = setTimeout(() => {
+        updateRoundCheckpoints();
+      }, 150);
+      return () => clearTimeout(timer);
     }
   }, [roundCheckpoints]);
 
@@ -242,10 +260,11 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
   const updateClientMarkers = async () => {
     if (!map.current || !map.current.getContainer()) return;
 
-    console.log('🏢 Updating client markers, current count:', clients.length);
-    console.log('🏢 Current clientMarkers count before clear:', clientMarkers.current.length);
+    console.log('🏢 === UPDATING CLIENT MARKERS ===');
+    console.log('🏢 Total clients to display:', clients.length);
+    console.log('🏢 Current markers before clear:', clientMarkers.current.length);
 
-    // CRITICAL: Clear ALL existing client markers first
+    // STEP 1: CLEAR ALL existing client markers completely
     clientMarkers.current.forEach(marker => {
       if (marker) {
         try {
@@ -256,19 +275,18 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       }
     });
     clientMarkers.current = [];
+    console.log('🏢 ✓ All client markers cleared');
 
-    console.log('🏢 Client markers cleared, now adding new markers');
-
-    // Get active rounds to determine which clients are in templates
+    // STEP 2: Determine which clients are in active rounds
     const activeRounds = userLocations.map(loc => loc.rounds).filter(Boolean);
     const activeTemplateIds = activeRounds.map(round => round?.template_id).filter(Boolean);
     
-    console.log('Active rounds:', activeRounds);
-    console.log('Active template IDs:', activeTemplateIds);
+    console.log('🏢 Active rounds:', activeRounds.length);
+    console.log('🏢 Active template IDs:', activeTemplateIds);
     
     let clientsInActiveRounds = new Set<string>();
     
-    // If we have active templates, get the clients from them
+    // Get clients from active templates
     if (activeTemplateIds.length > 0) {
       try {
         const { data: templateCheckpoints, error } = await supabase
@@ -276,30 +294,19 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
           .select("client_id, template_id")
           .in("template_id", activeTemplateIds);
 
-        if (error) {
-          console.error('Error fetching template checkpoints for markers:', error);
-        } else {
-          clientsInActiveRounds = new Set(templateCheckpoints?.map(cp => cp.client_id) || []);
-          console.log('Clients from template checkpoints:', Array.from(clientsInActiveRounds));
+        if (!error && templateCheckpoints) {
+          clientsInActiveRounds = new Set(templateCheckpoints.map(cp => cp.client_id));
+          console.log('🏢 Clients in active templates:', Array.from(clientsInActiveRounds));
         }
       } catch (error) {
-        console.error('Error in updateClientMarkers template fetch:', error);
+        console.error('🏢 Error fetching template checkpoints:', error);
       }
     }
-    
-    // Also check roundCheckpoints if available (fallback)
-    roundCheckpoints.forEach(checkpoint => {
-      if (checkpoint.client_id) {
-        clientsInActiveRounds.add(checkpoint.client_id);
-      }
-    });
 
-    console.log('Final clients in active rounds:', Array.from(clientsInActiveRounds));
-    console.log('All clients to display:', clients);
-
-    // Fetch checkpoint counts and details for all clients
+    // STEP 3: Fetch checkpoint data for ALL clients (not just those in active rounds)
     const clientCheckpointData: { [key: string]: { count: number, checkpoints: any[] } } = {};
     
+    console.log('🏢 Fetching checkpoint data for all clients...');
     for (const client of clients) {
       const { data: checkpoints, error } = await supabase
         .from("checkpoints")
@@ -313,15 +320,20 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
           count: checkpoints.length,
           checkpoints: checkpoints
         };
+        console.log(`🏢   Client "${client.name}": ${checkpoints.length} checkpoints`);
       }
     }
 
+    // STEP 4: Create markers for ALL clients (SEMPRE VISÍVEIS)
+    console.log('🏢 Creating markers for all clients...');
+    let markersCreated = 0;
+    
     clients.forEach(client => {
       if (client.lat && client.lng) {
         const isInActiveRound = clientsInActiveRounds.has(client.id);
         const checkpointInfo = clientCheckpointData[client.id] || { count: 0, checkpoints: [] };
         
-        console.log(`Client ${client.name} (${client.id}): isInActiveRound = ${isInActiveRound}, checkpoints = ${checkpointInfo.count}`);
+        console.log(`🏢 Creating marker for "${client.name}": ${isInActiveRound ? 'VERMELHO (em ronda)' : 'AZUL (sem ronda)'}, ${checkpointInfo.count} pontos`);
         
         // Create client marker with number badge
         const el = document.createElement('div');
@@ -391,8 +403,12 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
           .addTo(map.current!);
 
         clientMarkers.current.push(marker);
+        markersCreated++;
       }
     });
+
+    console.log('🏢 ✓ Client markers created:', markersCreated);
+    console.log('🏢 === CLIENT MARKERS UPDATE COMPLETE ===');
   };
 
   // Remove unused functions - data now comes from useRealtimeMap hook
@@ -400,10 +416,11 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
   const updateUserLocations = () => {
     if (!map.current || !map.current.getContainer()) return;
 
-    console.log('🗺️ Updating user locations, current count:', userLocations.length);
-    console.log('🗺️ Current userMarkers count before clear:', Object.keys(userMarkers.current).length);
+    console.log('👤 === UPDATING TACTICAL USER LOCATIONS ===');
+    console.log('👤 Tactical users to display:', userLocations.length);
+    console.log('👤 Current user markers before clear:', Object.keys(userMarkers.current).length);
 
-    // CRITICAL: Remove ALL existing markers first
+    // CRITICAL: Remove ALL existing user markers first
     Object.values(userMarkers.current).forEach(marker => {
       if (marker) {
         try {
@@ -414,8 +431,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       }
     });
     userMarkers.current = {};
-
-    console.log('🗺️ Markers cleared, now adding new markers');
+    console.log('👤 ✓ All user markers cleared');
 
     // Add new markers for tactical users
     userLocations.forEach((location) => {
@@ -580,6 +596,9 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
 
       userMarkers.current[location.user_id] = marker;
     });
+
+    console.log('👤 ✓ User markers created:', Object.keys(userMarkers.current).length);
+    console.log('👤 === TACTICAL USER LOCATIONS UPDATE COMPLETE ===');
 
     // Fit bounds if locations exist, but only on initial load
     if (userLocations.length > 0 && !map.current?.isMoving() && !map.current?.isZooming()) {
@@ -812,8 +831,9 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
   const updateRoundCheckpoints = () => {
     if (!map.current || !map.current.getContainer()) return;
 
-    console.log('📍 Updating checkpoint markers, current count:', roundCheckpoints.length);
-    console.log('📍 Current checkpointMarkers count before clear:', checkpointMarkers.current.length);
+    console.log('📍 === UPDATING CHECKPOINT MARKERS ===');
+    console.log('📍 Round checkpoints to display:', roundCheckpoints.length);
+    console.log('📍 Current checkpoint markers before clear:', checkpointMarkers.current.length);
 
     // CRITICAL: Remove ALL existing checkpoint markers first
     checkpointMarkers.current.forEach(marker => {
@@ -826,8 +846,14 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       }
     });
     checkpointMarkers.current = [];
+    console.log('📍 ✓ All checkpoint markers cleared');
 
-    console.log('📍 Checkpoint markers cleared, now adding new markers');
+    // If no checkpoints, just return
+    if (roundCheckpoints.length === 0) {
+      console.log('📍 No checkpoints to display');
+      console.log('📍 === CHECKPOINT MARKERS UPDATE COMPLETE ===');
+      return;
+    }
 
     // Add checkpoint markers
     roundCheckpoints.forEach(checkpoint => {
@@ -905,6 +931,9 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
 
       checkpointMarkers.current.push(marker);
     });
+
+    console.log('📍 ✓ Checkpoint markers created:', checkpointMarkers.current.length);
+    console.log('📍 === CHECKPOINT MARKERS UPDATE COMPLETE ===');
   };
 
   const refreshMap = () => {
