@@ -699,27 +699,29 @@ const RealtimeMap = () => {
 
     // Add checkpoint markers
     roundCheckpoints.forEach(checkpoint => {
-      // Create checkpoint marker
+      // Create checkpoint marker - VERDE se concluído, VERMELHO se pendente
       const el = document.createElement('div');
-      el.style.width = '24px';
-      el.style.height = '24px';
+      el.style.width = '26px';
+      el.style.height = '26px';
       el.style.borderRadius = '50%';
-      el.style.backgroundColor = checkpoint.visited ? 'hsl(var(--tactical-green))' : 'hsl(var(--tactical-red))';
+      el.style.backgroundColor = checkpoint.visited ? '#10b981' : '#ef4444';
       el.style.border = '3px solid white';
-      el.style.boxShadow = '0 2px 10px rgba(0,0,0,0.4)';
+      el.style.boxShadow = checkpoint.visited 
+        ? '0 2px 12px rgba(16, 185, 129, 0.5)' 
+        : '0 2px 12px rgba(239, 68, 68, 0.5)';
       el.style.cursor = 'pointer';
       el.style.display = 'flex';
       el.style.alignItems = 'center';
       el.style.justifyContent = 'center';
       el.style.color = 'white';
-      el.style.fontSize = '10px';
+      el.style.fontSize = '11px';
       el.style.fontWeight = 'bold';
-      el.textContent = checkpoint.order_index.toString();
+      el.textContent = checkpoint.visited ? '✓' : checkpoint.order_index.toString();
 
-      // Create label for checkpoint
+      // Create label for checkpoint - muda cor baseado no status
       const labelEl = document.createElement('div');
       labelEl.style.cssText = `
-        background: ${checkpoint.visited ? 'hsl(var(--tactical-green))' : 'hsl(var(--tactical-red))'};
+        background: ${checkpoint.visited ? '#10b981' : '#ef4444'};
         color: white;
         padding: 2px 6px;
         border-radius: 4px;
@@ -741,14 +743,43 @@ const RealtimeMap = () => {
         .setLngLat([checkpoint.lng, checkpoint.lat])
         .setPopup(
           new mapboxgl.Popup({ offset: 25 }).setHTML(`
-            <div style="padding: 10px;">
-              <h3 style="margin: 0 0 5px 0; font-weight: 600;">${checkpoint.name}</h3>
-              <p style="margin: 0; font-size: 12px; color: ${checkpoint.visited ? '#10b981' : '#ef4444'};">
-                Status: ${checkpoint.visited ? 'Visitado ✓' : 'Pendente ⏳'}
-              </p>
-              <p style="margin: 5px 0 0 0; font-size: 11px; opacity: 0.8;">
-                Ordem: ${checkpoint.order_index}
-              </p>
+            <div style="padding: 12px; ${checkpoint.visited ? 'border: 3px solid #10b981;' : 'border: 3px solid #ef4444;'} border-radius: 8px; background: white;">
+              <h3 style="margin: 0 0 8px 0; font-weight: 700; font-size: 14px; color: #1f2937;">
+                ${checkpoint.visited ? '✓ ' : '⏳ '}${checkpoint.name}
+              </h3>
+              
+              <div style="background: ${checkpoint.visited ? '#10b981' : '#ef4444'}; color: white; padding: 6px 10px; border-radius: 6px; margin: 0 0 10px 0; font-weight: bold; font-size: 12px; text-align: center;">
+                ${checkpoint.visited ? '✓ PONTO CONCLUÍDO' : '⏳ RONDA NÃO FINALIZADA'}
+              </div>
+              
+              <div style="margin: 8px 0;">
+                <p style="margin: 0 0 6px 0; font-size: 12px; color: ${checkpoint.visited ? '#10b981' : '#ef4444'}; font-weight: bold;">
+                  Status: ${checkpoint.visited ? 'CONCLUÍDO' : 'PENDENTE'}
+                </p>
+                <p style="margin: 0 0 4px 0; font-size: 11px; color: #4b5563;">
+                  <strong>Ordem:</strong> #${checkpoint.order_index}
+                </p>
+                <p style="margin: 0 0 4px 0; font-size: 11px; color: #4b5563;">
+                  <strong>ID Ronda:</strong> ${checkpoint.round_id.substring(0, 8)}...
+                </p>
+                <p style="margin: 4px 0 0 0; font-size: 10px; color: #6b7280;">
+                  📍 ${checkpoint.lat.toFixed(6)}, ${checkpoint.lng.toFixed(6)}
+                </p>
+              </div>
+              
+              ${!checkpoint.visited ? `
+                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
+                  <p style="margin: 0; font-size: 10px; color: #ef4444; font-style: italic;">
+                    ⚠️ Aguardando visita do tático
+                  </p>
+                </div>
+              ` : `
+                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
+                  <p style="margin: 0; font-size: 10px; color: #10b981; font-style: italic;">
+                    ✓ Ronda finalizada com sucesso
+                  </p>
+                </div>
+              `}
             </div>
           `)
         )
