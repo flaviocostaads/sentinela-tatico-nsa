@@ -53,7 +53,11 @@ interface EmergencyIncident {
   reported_at: string;
 }
 
-const RealtimeMap = () => {
+interface RealtimeMapProps {
+  isExpanded?: boolean;
+}
+
+const RealtimeMap = ({ isExpanded = false }: RealtimeMapProps) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const userMarkers = useRef<{ [key: string]: mapboxgl.Marker }>({});
@@ -885,6 +889,72 @@ const RealtimeMap = () => {
       });
     }
   };
+
+  // Render expanded fullscreen version
+  if (isExpanded) {
+    return (
+      <div className="w-full h-full bg-background">
+        {/* Header with Search Bar */}
+        <div className="flex items-center justify-between gap-4 p-4 border-b bg-card">
+          <div className="flex-1 flex items-center gap-2">
+            <Search className="w-4 h-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Buscar empresa por nome..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              className="max-w-md"
+            />
+            <Button onClick={handleSearch} variant="default" size="sm">
+              Localizar
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary" className="text-xs">
+              {clients.length} clientes • {userLocations.length} táticos • {roundCheckpoints.length} pontos
+            </Badge>
+            {hasActiveAlert && (
+              <Badge variant="destructive" className="animate-pulse text-xs">
+                🚨 {activeEmergencies.length} EMERGÊNCIA(S)
+              </Badge>
+            )}
+            <Badge 
+              variant={isAutoUpdating ? "default" : "secondary"} 
+              className="flex items-center gap-2 text-xs"
+            >
+              <div className={`w-2 h-2 rounded-full ${isAutoUpdating ? 'bg-tactical-green animate-pulse' : 'bg-gray-400'}`}></div>
+              {isAutoUpdating ? 'Auto-Atualização' : 'Desconectado'}
+            </Badge>
+            <div className="text-xs text-muted-foreground">
+              {lastUpdateTime.toLocaleTimeString('pt-BR')}
+            </div>
+          </div>
+        </div>
+        
+        {/* Full Screen Map */}
+        <div ref={mapContainer} className="w-full h-[calc(100vh-120px)]">
+          <FullscreenEmergencyAlert isFullscreen={true} />
+        </div>
+        
+        <CheckpointNotification enabled={true} />
+        
+        {selectedIncident && (
+          <IncidentDetailsDialog
+            open={detailsOpen}
+            onClose={() => {
+              setDetailsOpen(false);
+              setSelectedIncident(null);
+            }}
+            incident={selectedIncident}
+            onRefresh={() => {
+              fetchAllData();
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <Card className="tactical-card">

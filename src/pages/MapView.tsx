@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { MapPin, Navigation, Activity, Clock, Maximize2, X } from "lucide-react";
+import { MapPin, Navigation, Activity, Clock, Maximize2, X, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,6 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
-import MapView from "@/components/MapView";
 import RealTimeRoundTracking from "@/components/Dashboard/RealTimeRoundTracking";
 import RealtimeMap from "@/components/Dashboard/RealtimeMap";
 import EmergencyNotification from "@/components/Dashboard/EmergencyNotification";
@@ -279,10 +278,14 @@ const MapViewPage = () => {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => fetchActiveRounds()}
+                    onClick={() => {
+                      const url = window.location.href;
+                      window.open(url, '_blank', 'width=1200,height=800');
+                      setExpanded(false);
+                    }}
                     className="border-tactical-blue text-tactical-blue hover:bg-tactical-blue hover:text-white"
                   >
-                    <Clock className="w-4 h-4 mr-2" /> Atualizar
+                    <ExternalLink className="w-4 h-4 mr-2" /> Abrir em Nova Janela
                   </Button>
                   <Button
                     variant="outline"
@@ -295,12 +298,7 @@ const MapViewPage = () => {
                 </div>
               </div>
               <div className="w-full h-[calc(100vh-56px)]">
-                <MapView 
-                  center={[-48.3336, -10.1849]} 
-                  zoom={12}
-                  showControls={true}
-                  className="w-full h-full"
-                />
+                <RealtimeMap isExpanded={true} />
               </div>
             </div>
           )}
