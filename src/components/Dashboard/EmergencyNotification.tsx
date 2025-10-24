@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import IncidentDetailsDialog from "@/components/TacticApp/IncidentDetailsDialog";
 
 interface EmergencyIncident {
   id: string;
@@ -30,6 +31,8 @@ interface EmergencyIncident {
 const EmergencyNotification = () => {
   const [emergencyIncidents, setEmergencyIncidents] = useState<EmergencyIncident[]>([]);
   const [visible, setVisible] = useState(false);
+  const [selectedIncident, setSelectedIncident] = useState<any>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -142,6 +145,29 @@ const EmergencyNotification = () => {
     }
   };
 
+  const handleViewDetails = async (incident: EmergencyIncident) => {
+    try {
+      // Fetch full incident details
+      const { data, error } = await supabase
+        .from("incidents")
+        .select("*")
+        .eq("id", incident.id)
+        .single();
+
+      if (error) throw error;
+      
+      setSelectedIncident(data);
+      setDetailsOpen(true);
+    } catch (error) {
+      console.error("Error fetching incident details:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar detalhes da ocorrência",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (!visible || emergencyIncidents.length === 0) {
     return null;
   }
@@ -222,6 +248,14 @@ const EmergencyNotification = () => {
                 <Button
                   size="sm"
                   variant="outline"
+                  onClick={() => handleViewDetails(incident)}
+                  className="text-xs"
+                >
+                  Ver Detalhes
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={() => {
                     if (incident.lat && incident.lng) {
                       window.open(`https://maps.google.com?q=${incident.lat},${incident.lng}`, '_blank');
@@ -236,6 +270,21 @@ const EmergencyNotification = () => {
           </CardContent>
         </Card>
       ))}
+
+      {/* Incident Details Dialog */}
+      {selectedIncident && (
+        <IncidentDetailsDialog
+          open={detailsOpen}
+          onClose={() => {
+            setDetailsOpen(false);
+            setSelectedIncident(null);
+          }}
+          incident={selectedIncident}
+          onRefresh={() => {
+            fetchActiveEmergencies();
+          }}
+        />
+      )}
     </div>
   );
 };

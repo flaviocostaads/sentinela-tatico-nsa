@@ -12,6 +12,7 @@ import { useSecureMapbox } from "@/hooks/useSecureMapbox";
 import { useEmergencyAlert } from "@/hooks/useEmergencyAlert";
 import { useRealtimeMap } from "@/hooks/useRealtimeMap";
 import FullscreenEmergencyAlert from "./FullscreenEmergencyAlert";
+import IncidentDetailsDialog from "@/components/TacticApp/IncidentDetailsDialog";
 import "./EmergencyMapStyles.css";
 
 interface UserLocation {
@@ -55,6 +56,8 @@ const RealtimeMap = () => {
   const userMarkers = useRef<{ [key: string]: mapboxgl.Marker }>({});
   const [roundCheckpoints, setRoundCheckpoints] = useState<RoundCheckpoint[]>([]);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [selectedIncident, setSelectedIncident] = useState<any>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const clientMarkers = useRef<mapboxgl.Marker[]>([]);
   const checkpointMarkers = useRef<mapboxgl.Marker[]>([]);
   const { toast } = useToast();
@@ -456,10 +459,14 @@ const RealtimeMap = () => {
                 📍 ${location.lat.toFixed(6)}, ${location.lng.toFixed(6)}
               </p>
               ${hasActiveEmergency ? `
-                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #dc2626;">
+                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #dc2626; display: flex; gap: 6px;">
+                  <button onclick="window.handleViewEmergencyDetails('${location.rounds?.id}')" 
+                    style="flex: 1; background: #dc2626; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: bold;">
+                    📋 Ver Detalhes
+                  </button>
                   <button onclick="window.open('https://maps.google.com?q=${location.lat},${location.lng}', '_blank')" 
-                    style="background: #dc2626; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: bold;">
-                    🗺️ Ver no Google Maps
+                    style="flex: 1; background: #16a34a; color: white; border: none; padding: 8px 12px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: bold;">
+                    🗺️ Google Maps
                   </button>
                 </div>
               ` : ''}
@@ -494,6 +501,43 @@ const RealtimeMap = () => {
       map.current.fitBounds(new mapboxgl.LngLatBounds([-48.5, -10.4], [-48.1, -9.9]), { padding: 50 });
     }
   };
+
+  const handleViewEmergencyDetails = async (roundId: string) => {
+    try {
+      // Find the emergency incident for this round
+      const { data: incident, error } = await supabase
+        .from("incidents")
+        .select("*")
+        .eq("round_id", roundId)
+        .eq("status", "open")
+        .in("priority", ["medium", "high", "critical"])
+        .order("reported_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (error) throw error;
+      
+      if (incident) {
+        setSelectedIncident(incident);
+        setDetailsOpen(true);
+      }
+    } catch (error) {
+      console.error("Error fetching emergency details:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar detalhes da emergência",
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Expose function globally for popup buttons
+  useEffect(() => {
+    (window as any).handleViewEmergencyDetails = handleViewEmergencyDetails;
+    return () => {
+      delete (window as any).handleViewEmergencyDetails;
+    };
+  }, [activeEmergencies]);
 
   // Remove other unused subscription functions
 
@@ -802,6 +846,21 @@ const RealtimeMap = () => {
       
       {/* Checkpoint Notifications */}
       <CheckpointNotification enabled={true} />
+
+      {/* Incident Details Dialog */}
+      {selectedIncident && (
+        <IncidentDetailsDialog
+          open={detailsOpen}
+          onClose={() => {
+            setDetailsOpen(false);
+            setSelectedIncident(null);
+          }}
+          incident={selectedIncident}
+          onRefresh={() => {
+            fetchAllData();
+          }}
+        />
+      )}
     </Card>
   );
 };

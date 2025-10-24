@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import IncidentDetailsDialog from "@/components/TacticApp/IncidentDetailsDialog";
 
 interface AdminEmergencyIncident {
   id: string;
@@ -32,6 +33,8 @@ const AdminEmergencyAlert = () => {
   const [emergencyIncidents, setEmergencyIncidents] = useState<AdminEmergencyIncident[]>([]);
   const [visible, setVisible] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [selectedIncident, setSelectedIncident] = useState<any>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
@@ -184,6 +187,29 @@ const AdminEmergencyAlert = () => {
     }
   };
 
+  const handleViewDetails = async (incident: AdminEmergencyIncident) => {
+    try {
+      // Fetch full incident details
+      const { data, error } = await supabase
+        .from("incidents")
+        .select("*")
+        .eq("id", incident.id)
+        .single();
+
+      if (error) throw error;
+      
+      setSelectedIncident(data);
+      setDetailsOpen(true);
+    } catch (error) {
+      console.error("Error fetching incident details:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar detalhes da ocorrência",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Only show alert in corner when not on map page
   const isOnMapPage = window.location.pathname.includes('/map') || window.location.pathname === '/';
   
@@ -286,10 +312,7 @@ const AdminEmergencyAlert = () => {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => {
-                    // Navigate to incidents page - you can implement this
-                    window.location.href = '/incidents';
-                  }}
+                  onClick={() => handleViewDetails(incident)}
                   className="text-xs"
                 >
                   Ver Detalhes
@@ -299,6 +322,21 @@ const AdminEmergencyAlert = () => {
           </CardContent>
         </Card>
       ))}
+
+      {/* Incident Details Dialog */}
+      {selectedIncident && (
+        <IncidentDetailsDialog
+          open={detailsOpen}
+          onClose={() => {
+            setDetailsOpen(false);
+            setSelectedIncident(null);
+          }}
+          incident={selectedIncident}
+          onRefresh={() => {
+            fetchActiveEmergencies();
+          }}
+        />
+      )}
     </div>
   );
 };
