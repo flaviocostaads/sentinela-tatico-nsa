@@ -57,10 +57,11 @@ interface RealtimeMapProps {
   isExpanded?: boolean;
   onClose?: () => void;
   onOpenNewWindow?: () => void;
+  onExpand?: () => void;
   defaultCity?: string;
 }
 
-const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, defaultCity = 'São Paulo, SP, Brasil' }: RealtimeMapProps) => {
+const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, defaultCity = 'São Paulo, SP, Brasil' }: RealtimeMapProps) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const userMarkers = useRef<{ [key: string]: mapboxgl.Marker }>({});

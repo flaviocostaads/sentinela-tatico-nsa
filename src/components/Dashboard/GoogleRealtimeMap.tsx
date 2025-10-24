@@ -24,9 +24,10 @@ interface GoogleRealtimeMapProps {
   isExpanded?: boolean;
   onClose?: () => void;
   onOpenNewWindow?: () => void;
+  onExpand?: () => void;
 }
 
-const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isExpanded = false, onClose, onOpenNewWindow }: GoogleRealtimeMapProps) => {
+const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isExpanded = false, onClose, onOpenNewWindow, onExpand }: GoogleRealtimeMapProps) => {
   const mapRef = useRef<google.maps.Map | null>(null);
   const [selectedMarker, setSelectedMarker] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -341,7 +342,7 @@ const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isE
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={toggleFullscreen}
+            onClick={onExpand || toggleFullscreen}
           >
             <Maximize2 className="w-4 h-4" />
           </Button>

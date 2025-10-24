@@ -11,6 +11,7 @@ import MapView from "@/components/MapView";
 import { Round } from "@/types";
 const Index = () => {
   const [selectedRound, setSelectedRound] = useState<Round | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const [stats, setStats] = useState({
     activeTactics: 0,
     totalTactics: 0,
@@ -192,7 +193,7 @@ const Index = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Mapa */}
             <div className="lg:col-span-2">
-              <MapProviderWrapper />
+              <MapProviderWrapper onExpand={() => setExpanded(true)} />
             </div>
 
             {/* Rondas Ativas ou Detalhes */}
@@ -200,6 +201,15 @@ const Index = () => {
               {selectedRound ? <RoundDetails round={selectedRound} onClose={() => setSelectedRound(null)} /> : <ActiveRoundsCard onRoundSelect={setSelectedRound} />}
             </div>
           </div>
+
+          {expanded && (
+            <div className="fixed inset-0 z-50 bg-background">
+              <MapProviderWrapper 
+                isExpanded={true} 
+                onClose={() => setExpanded(false)}
+              />
+            </div>
+          )}
         </main>
       </div>
     </div>;

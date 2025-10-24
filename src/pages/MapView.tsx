@@ -145,7 +145,7 @@ const MapViewPage = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Mapa em Tempo Real */}
           <div className="lg:col-span-2">
-              <MapProviderWrapper />
+              <MapProviderWrapper onExpand={() => setExpanded(true)} />
             </div>
 
             {/* Painel lateral */}

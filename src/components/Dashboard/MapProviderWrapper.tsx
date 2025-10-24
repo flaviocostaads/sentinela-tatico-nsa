@@ -8,6 +8,7 @@ interface MapProviderWrapperProps {
   isExpanded?: boolean;
   onClose?: () => void;
   onOpenNewWindow?: () => void;
+  onExpand?: () => void;
 }
 
 const MapProviderWrapper = (props: MapProviderWrapperProps) => {
