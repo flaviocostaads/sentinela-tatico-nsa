@@ -32,6 +32,7 @@ const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isE
   const [searchQuery, setSearchQuery] = useState('');
   const [mapCenter, setMapCenter] = useState(defaultCenter);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [highlightedMarkerId, setHighlightedMarkerId] = useState<string | null>(null);
   const { userLocations, clients, activeEmergencies, lastUpdateTime, fetchAllData } = useRealtimeMap();
   const { toast } = useToast();
 
@@ -99,8 +100,12 @@ const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isE
     if (foundClient && foundClient.lat && foundClient.lng && mapRef.current) {
       const position = { lat: foundClient.lat, lng: foundClient.lng };
       mapRef.current.panTo(position);
-      mapRef.current.setZoom(16);
+      mapRef.current.setZoom(18);
       setSelectedMarker(foundClient);
+      
+      // Highlight the marker with animation
+      setHighlightedMarkerId(foundClient.id);
+      setTimeout(() => setHighlightedMarkerId(null), 3000);
 
       toast({
         title: "Empresa encontrada",
@@ -113,6 +118,19 @@ const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isE
         variant: "destructive",
       });
     }
+  };
+
+  const handleOpenNewWindow = () => {
+    const width = 1200;
+    const height = 800;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+    
+    window.open(
+      window.location.href + '?map=fullscreen',
+      'GoogleMapWindow',
+      `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes`
+    );
   };
 
   const renderContent = () => (
@@ -136,12 +154,13 @@ const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isE
               position={{ lat: client.lat, lng: client.lng }}
               icon={{
                 path: google.maps.SymbolPath.CIRCLE,
-                fillColor: '#3b82f6',
+                fillColor: highlightedMarkerId === client.id ? '#f59e0b' : '#3b82f6',
                 fillOpacity: 1,
                 strokeColor: '#ffffff',
-                strokeWeight: 2,
-                scale: 8,
+                strokeWeight: highlightedMarkerId === client.id ? 4 : 2,
+                scale: highlightedMarkerId === client.id ? 14 : 8,
               }}
+              animation={highlightedMarkerId === client.id ? google.maps.Animation.BOUNCE : undefined}
               onClick={() => setSelectedMarker(client)}
             />
           )
@@ -190,15 +209,26 @@ const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isE
             }}
             onCloseClick={() => setSelectedMarker(null)}
           >
-            <div className="p-2">
-              <h3 className="font-bold text-sm">
+            <div className="p-3 min-w-[250px]">
+              <h3 className="font-bold text-base text-gray-900 mb-2 border-b-2 border-blue-500 pb-1">
                 {selectedMarker.name || selectedMarker.title || 'Localização'}
               </h3>
               {selectedMarker.address && (
-                <p className="text-xs text-gray-600">{selectedMarker.address}</p>
+                <p className="text-sm text-gray-700 font-medium mb-1">
+                  📍 {selectedMarker.address}
+                </p>
               )}
               {selectedMarker.description && (
-                <p className="text-xs text-gray-600 mt-1">{selectedMarker.description}</p>
+                <p className="text-sm text-gray-600 mt-2 italic">
+                  {selectedMarker.description}
+                </p>
+              )}
+              {selectedMarker.rounds && (
+                <div className="mt-2 pt-2 border-t border-gray-200">
+                  <p className="text-xs font-semibold text-green-700">
+                    🔄 Em ronda ativa
+                  </p>
+                </div>
               )}
             </div>
           </InfoWindow>
@@ -260,12 +290,10 @@ const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isE
               <Maximize2 className="w-4 h-4 mr-1" />
               Tela Cheia
             </Button>
-            {onOpenNewWindow && (
-              <Button variant="outline" size="sm" onClick={onOpenNewWindow}>
-                <ExternalLink className="w-4 h-4 mr-1" />
-                Abrir em Nova Janela
-              </Button>
-            )}
+            <Button variant="outline" size="sm" onClick={handleOpenNewWindow}>
+              <ExternalLink className="w-4 h-4 mr-1" />
+              Abrir em Nova Janela
+            </Button>
             {(onClose || isFullscreen) && (
               <Button 
                 variant="outline" 
@@ -316,6 +344,9 @@ const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isE
             onClick={toggleFullscreen}
           >
             <Maximize2 className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleOpenNewWindow}>
+            <ExternalLink className="w-4 h-4" />
           </Button>
         </div>
       </CardHeader>
