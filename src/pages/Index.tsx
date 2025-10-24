@@ -11,7 +11,6 @@ import MapView from "@/components/MapView";
 import { Round } from "@/types";
 const Index = () => {
   const [selectedRound, setSelectedRound] = useState<Round | null>(null);
-  const [expanded, setExpanded] = useState(false);
   const [stats, setStats] = useState({
     activeTactics: 0,
     totalTactics: 0,
@@ -193,7 +192,17 @@ const Index = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Mapa */}
             <div className="lg:col-span-2">
-              <MapProviderWrapper onExpand={() => setExpanded(true)} />
+              <MapProviderWrapper onExpand={() => {
+                const width = 1400;
+                const height = 900;
+                const left = (window.screen.width - width) / 2;
+                const top = (window.screen.height - height) / 2;
+                window.open(
+                  '/map-fullscreen',
+                  'MapFullscreen',
+                  `width=${width},height=${height},left=${left},top=${top},resizable=yes,scrollbars=yes,menubar=no,toolbar=no,location=no`
+                );
+              }} />
             </div>
 
             {/* Rondas Ativas ou Detalhes */}
@@ -201,15 +210,6 @@ const Index = () => {
               {selectedRound ? <RoundDetails round={selectedRound} onClose={() => setSelectedRound(null)} /> : <ActiveRoundsCard onRoundSelect={setSelectedRound} />}
             </div>
           </div>
-
-          {expanded && (
-            <div className="fixed inset-0 z-50 bg-background">
-              <MapProviderWrapper 
-                isExpanded={true} 
-                onClose={() => setExpanded(false)}
-              />
-            </div>
-          )}
         </main>
       </div>
     </div>;

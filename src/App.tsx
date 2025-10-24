@@ -15,6 +15,7 @@ import Documentation from "./pages/Documentation";
 import NotFound from "./pages/NotFound";
 import Rounds from "./pages/Rounds";
 import MapViewPage from "./pages/MapView";
+import MapFullscreen from "./pages/MapFullscreen";
 import History from "./pages/History";
 import Reports from "./pages/Reports";
 import Incidents from "./pages/Incidents";
@@ -103,6 +104,11 @@ const App = () => (
               <Route path="/map" element={
                 <ProtectedRoute>
                   <MapViewPage />
+                </ProtectedRoute>
+              } />
+              <Route path="/map-fullscreen" element={
+                <ProtectedRoute>
+                  <MapFullscreen />
                 </ProtectedRoute>
               } />
               <Route path="/history" element={
