@@ -21,6 +21,8 @@ const MapProviderWrapper = (props: MapProviderWrapperProps) => {
     );
   }
 
+  console.log('🗺️ MapProviderWrapper:', { provider, hasApiKey: !!googleMapsApiKey, defaultCity });
+
   if (provider === 'google') {
     if (!googleMapsApiKey) {
       return (
@@ -34,6 +36,7 @@ const MapProviderWrapper = (props: MapProviderWrapperProps) => {
       );
     }
 
+    console.log('✅ Rendering Google Maps with API Key:', googleMapsApiKey.substring(0, 15) + '...');
     return <GoogleRealtimeMap apiKey={googleMapsApiKey} defaultCity={defaultCity} {...props} />;
   }
 

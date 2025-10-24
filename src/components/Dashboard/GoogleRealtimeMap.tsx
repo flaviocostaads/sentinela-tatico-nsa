@@ -35,6 +35,13 @@ const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isE
   const { userLocations, clients, activeEmergencies, lastUpdateTime, fetchAllData } = useRealtimeMap();
   const { toast } = useToast();
 
+  console.log('🗺️ GoogleRealtimeMap rendering with:', {
+    hasApiKey: !!apiKey,
+    apiKeyLength: apiKey?.length || 0,
+    apiKeyPreview: apiKey ? `${apiKey.substring(0, 15)}...` : 'none',
+    defaultCity
+  });
+
   // Geocode the default city on mount
   useEffect(() => {
     if (defaultCity && window.google?.maps) {

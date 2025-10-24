@@ -28,21 +28,27 @@ export const useMapProvider = () => {
       const { data, error } = await supabase
         .from('company_settings')
         .select('id, map_provider, google_maps_api_key, default_city')
+        .order('created_at', { ascending: true })
         .limit(1)
-        .maybeSingle();
+        .single();
 
       if (error) {
-        console.error('Error fetching map provider config:', error);
+        console.error('❌ Error fetching map provider config:', error);
         return;
       }
 
-      if (data) {
-        setProvider((data.map_provider as MapProvider) || 'mapbox');
-        setGoogleMapsApiKey(data.google_maps_api_key || '');
-        setDefaultCity(data.default_city || 'São Paulo, SP, Brasil');
-      }
+      console.log('🗺️ Map Provider Config Loaded:', {
+        provider: data.map_provider,
+        hasApiKey: !!data.google_maps_api_key,
+        apiKeyLength: data.google_maps_api_key?.length || 0,
+        defaultCity: data.default_city
+      });
+
+      setProvider((data.map_provider as MapProvider) || 'mapbox');
+      setGoogleMapsApiKey(data.google_maps_api_key || '');
+      setDefaultCity(data.default_city || 'São Paulo, SP, Brasil');
     } catch (err) {
-      console.error('Error:', err);
+      console.error('❌ Error loading map config:', err);
     } finally {
       setLoading(false);
     }
