@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Navigation, User, X, RotateCcw } from "lucide-react";
+import { Navigation, User, X, RotateCcw, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,8 @@ const RealtimeMap = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<any>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [highlightedMarker, setHighlightedMarker] = useState<string | null>(null);
   const clientMarkers = useRef<mapboxgl.Marker[]>([]);
   const checkpointMarkers = useRef<mapboxgl.Marker[]>([]);
   const { toast } = useToast();
@@ -119,7 +122,7 @@ const RealtimeMap = () => {
       updateUserLocations();
       updateClientMarkers();
     }
-  }, [userLocations, clients]);
+  }, [userLocations, clients, highlightedMarker]);
 
   // Update map when locations change
   useEffect(() => {
@@ -127,7 +130,7 @@ const RealtimeMap = () => {
       updateUserLocations();
       updateClientMarkers();
     }
-  }, [userLocations, clients]);
+  }, [userLocations, clients, highlightedMarker]);
 
   // Update checkpoints when user locations change (they contain active rounds)
   useEffect(() => {
@@ -294,45 +297,34 @@ const RealtimeMap = () => {
           el.style.animation = 'pulse 2s infinite';
         }
 
-        // Create label for client
-        const labelEl = document.createElement('div');
-        labelEl.style.cssText = `
-          background: ${isInActiveRound ? 'hsl(var(--tactical-red))' : 'hsl(var(--primary))'};
-          color: hsl(var(--primary-foreground));
-          padding: 2px 6px;
-          border-radius: 4px;
-          font-size: 10px;
-          font-weight: 600;
-          white-space: nowrap;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-          pointer-events: none;
-          transform: translate(-50%, -100%);
-          margin-bottom: 5px;
-          ${isInActiveRound ? 'animation: pulse 2s infinite;' : ''}
-        `;
-        labelEl.textContent = client.name;
-
-        const labelMarker = new mapboxgl.Marker(labelEl, { anchor: 'bottom' })
-          .setLngLat([client.lng, client.lat])
-          .addTo(map.current!);
+        // Highlight marker if it matches search or is highlighted
+        const isHighlighted = highlightedMarker === client.id;
+        if (isHighlighted) {
+          el.style.width = '32px';
+          el.style.height = '32px';
+          el.style.boxShadow = '0 0 25px rgba(255, 215, 0, 0.9), 0 0 50px rgba(255, 215, 0, 0.6), 0 2px 15px rgba(0,0,0,0.4)';
+          el.style.border = '4px solid gold';
+          el.style.zIndex = '9999';
+        }
 
         const marker = new mapboxgl.Marker(el)
           .setLngLat([client.lng, client.lat])
           .setPopup(
             new mapboxgl.Popup({ offset: 25 }).setHTML(`
               <div style="padding: 10px; ${isInActiveRound ? 'border: 3px solid hsl(var(--tactical-red)); background: linear-gradient(135deg, #fef2f2, #ffffff);' : ''}">
-                <h3 style="margin: 0 0 5px 0; font-weight: 600; ${isInActiveRound ? 'color: hsl(var(--tactical-red));' : ''}">${isInActiveRound ? '🎯 ' : ''}${client.name}</h3>
+                <h3 style="margin: 0 0 5px 0; font-weight: 600; color: #111827; ${isInActiveRound ? 'color: hsl(var(--tactical-red));' : ''}">${isInActiveRound ? '🎯 ' : ''}${client.name}</h3>
                 ${isInActiveRound ? '<div style="background: hsl(var(--tactical-red)); color: white; padding: 4px 8px; border-radius: 4px; margin: 0 0 5px 0; font-weight: bold; font-size: 11px; text-align: center;">🎯 INCLUÍDO NA RONDA ATIVA</div>' : ''}
-                <p style="margin: 0; font-size: 12px;">${client.address}</p>
-                <p style="margin: 5px 0 0 0; font-size: 11px; opacity: 0.8;">
-                  📍 ${client.lat.toFixed(4)}, ${client.lng.toFixed(4)}
+                <p style="margin: 0; font-size: 12px; color: #374151;"><strong style="color: #111827;">📍 Endereço:</strong><br/>${client.address}</p>
+                <p style="margin: 5px 0 0 0; font-size: 11px; color: #6b7280;">
+                  <strong style="color: #111827;">🗺️ Coordenadas:</strong><br/>
+                  ${client.lat.toFixed(6)}, ${client.lng.toFixed(6)}
                 </p>
               </div>
             `)
           )
           .addTo(map.current!);
 
-        clientMarkers.current.push(marker, labelMarker);
+        clientMarkers.current.push(marker);
       }
     });
   };
@@ -782,27 +774,6 @@ const RealtimeMap = () => {
       el.style.fontWeight = 'bold';
       el.textContent = checkpoint.visited ? '✓' : checkpoint.order_index.toString();
 
-      // Create label for checkpoint - muda cor baseado no status
-      const labelEl = document.createElement('div');
-      labelEl.style.cssText = `
-        background: ${checkpoint.visited ? '#10b981' : '#ef4444'};
-        color: white;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 10px;
-        font-weight: 600;
-        white-space: nowrap;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        pointer-events: none;
-        transform: translate(-50%, -100%);
-        margin-bottom: 5px;
-      `;
-      labelEl.textContent = checkpoint.name;
-
-      const labelMarker = new mapboxgl.Marker(labelEl, { anchor: 'bottom' })
-        .setLngLat([checkpoint.lng, checkpoint.lat])
-        .addTo(map.current!);
-
       const marker = new mapboxgl.Marker(el)
         .setLngLat([checkpoint.lng, checkpoint.lat])
         .setPopup(
@@ -856,7 +827,7 @@ const RealtimeMap = () => {
         )
         .addTo(map.current!);
 
-      checkpointMarkers.current.push(marker, labelMarker);
+      checkpointMarkers.current.push(marker);
     });
   };
 
@@ -864,9 +835,60 @@ const RealtimeMap = () => {
     fetchAllData();
   };
 
+  const handleSearch = () => {
+    if (!searchQuery.trim() || !map.current) return;
+
+    const query = searchQuery.toLowerCase().trim();
+    
+    // Search in clients
+    const foundClient = clients.find(client => 
+      client.name.toLowerCase().includes(query)
+    );
+
+    if (foundClient) {
+      // Highlight the marker
+      setHighlightedMarker(foundClient.id);
+      
+      // Center map on the found location
+      map.current.flyTo({
+        center: [foundClient.lng, foundClient.lat],
+        zoom: 16,
+        duration: 2000
+      });
+
+      // Show popup
+      setTimeout(() => {
+        const marker = clientMarkers.current.find(m => {
+          const lngLat = m.getLngLat();
+          return lngLat.lng === foundClient.lng && lngLat.lat === foundClient.lat;
+        });
+        if (marker) {
+          marker.togglePopup();
+        }
+      }, 2000);
+
+      toast({
+        title: "Cliente encontrado!",
+        description: `${foundClient.name} foi localizado no mapa`,
+      });
+
+      // Remove highlight after 5 seconds
+      setTimeout(() => {
+        setHighlightedMarker(null);
+        updateClientMarkers();
+      }, 5000);
+    } else {
+      toast({
+        title: "Cliente não encontrado",
+        description: `Nenhum cliente encontrado com o nome "${searchQuery}"`,
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <Card className="tactical-card">
-      <CardHeader>
+      <CardHeader className="space-y-4">
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <Navigation className="w-5 h-5" />
@@ -909,6 +931,25 @@ const RealtimeMap = () => {
             </div>
           </div>
         </CardTitle>
+        
+        {/* Search Bar */}
+        <div className="flex items-center gap-2 px-6">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Buscar empresa por nome..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+              className="pl-10"
+            />
+          </div>
+          <Button onClick={handleSearch} variant="default" size="sm">
+            <Search className="w-4 h-4 mr-2" />
+            Localizar
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="p-0">
         <div id="realtime-map" ref={mapContainer} className="w-full h-[500px] rounded-lg relative">
