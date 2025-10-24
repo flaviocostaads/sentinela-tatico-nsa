@@ -39,6 +39,8 @@ interface RoundCheckpoint {
   visited: boolean;
   round_id: string;
   client_id: string;
+  client_name?: string;
+  client_address?: string;
   order_index: number;
 }
 
@@ -156,17 +158,25 @@ const RealtimeMap = () => {
         table: 'checkpoint_visits'
       }, (payload) => {
         console.log('📍 Real-time checkpoint visit change detected:', payload);
+        console.log('Event type:', payload.eventType);
+        console.log('New data:', payload.new);
         
         // Re-fetch checkpoints when a visit is created/updated
         if (map.current && userLocations.length > 0) {
           const activeRounds = userLocations.map(loc => loc.rounds).filter(Boolean);
           if (activeRounds.length > 0) {
-            console.log('🔄 Refreshing checkpoints due to visit change');
-            fetchRoundCheckpoints(activeRounds);
+            console.log('🔄 Refreshing checkpoints due to visit change for rounds:', activeRounds.map(r => r.id));
+            
+            // Add a small delay to ensure database has been updated
+            setTimeout(() => {
+              fetchRoundCheckpoints(activeRounds);
+            }, 500);
           }
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📍 Checkpoint visits subscription status:', status);
+      });
 
     return () => {
       console.log('🔄 Cleaning up checkpoint visits subscription');
@@ -637,6 +647,20 @@ const RealtimeMap = () => {
       console.log('Client checkpoints fetched from database:', clientCheckpoints);
       console.log('Total checkpoints found:', clientCheckpoints?.length || 0);
 
+      // Get client data with coordinates for checkpoints without lat/lng
+      const { data: clientsData, error: clientsError } = await supabase
+        .from("clients")
+        .select("id, name, lat, lng, address")
+        .in("id", clientIds)
+        .eq("active", true);
+
+      if (clientsError) {
+        console.error('Error fetching clients data:', clientsError);
+        throw clientsError;
+      }
+      
+      console.log('Clients data fetched for coordinates:', clientsData);
+
       // Get checkpoint visits for these rounds
       const { data: visits, error: visitsError } = await supabase
         .from("checkpoint_visits")
@@ -667,31 +691,41 @@ const RealtimeMap = () => {
         // Get all checkpoints for this client
         const checkpointsForClient = clientCheckpoints?.filter(cp => cp.client_id === tc.client_id) || [];
         
+        // Get client data for this checkpoint to use as fallback coordinates
+        const clientData = clientsData?.find(c => c.id === tc.client_id);
+        
         console.log(`Found ${checkpointsForClient.length} checkpoints for client ${tc.client_id}:`, checkpointsForClient);
+        console.log(`Client data for fallback coordinates:`, clientData);
         
         // Add each individual checkpoint to the round
         checkpointsForClient.forEach((checkpoint, cpIndex) => {
           console.log(`  Processing individual checkpoint ${cpIndex + 1}:`, checkpoint);
           
-          if (checkpoint.lat && checkpoint.lng) {
+          // Use checkpoint coordinates if available, otherwise use client coordinates
+          const lat = checkpoint.lat || clientData?.lat;
+          const lng = checkpoint.lng || clientData?.lng;
+          
+          if (lat && lng) {
             const checkpointId = checkpoint.id;
             const isVisited = visits?.some(v => v.checkpoint_id === checkpointId && v.round_id === activeRound.id) || false;
             
             const formattedCheckpoint = {
               id: checkpointId,
               name: checkpoint.name,
-              lat: Number(checkpoint.lat),
-              lng: Number(checkpoint.lng),
+              lat: Number(lat),
+              lng: Number(lng),
               visited: isVisited,
               round_id: activeRound.id,
               client_id: tc.client_id,
+              client_name: clientData?.name || checkpoint.name,
+              client_address: clientData?.address || '',
               order_index: checkpoint.order_index
             };
             
-            console.log("Adding checkpoint to map:", formattedCheckpoint);
+            console.log("✓ Adding checkpoint to map:", formattedCheckpoint);
             formattedCheckpoints.push(formattedCheckpoint);
           } else {
-            console.log("  Checkpoint has no valid coordinates:", checkpoint);
+            console.warn("⚠️ Checkpoint and client both missing coordinates:", checkpoint, clientData);
           }
         });
         
@@ -772,41 +806,47 @@ const RealtimeMap = () => {
       const marker = new mapboxgl.Marker(el)
         .setLngLat([checkpoint.lng, checkpoint.lat])
         .setPopup(
-          new mapboxgl.Popup({ offset: 25 }).setHTML(`
-            <div style="padding: 12px; ${checkpoint.visited ? 'border: 3px solid #10b981;' : 'border: 3px solid #ef4444;'} border-radius: 8px; background: white;">
-              <h3 style="margin: 0 0 8px 0; font-weight: 700; font-size: 14px; color: #1f2937;">
+          new mapboxgl.Popup({ offset: 25, maxWidth: '300px' }).setHTML(`
+            <div style="padding: 14px; ${checkpoint.visited ? 'border: 3px solid #10b981;' : 'border: 3px solid #ef4444;'} border-radius: 8px; background: white; min-width: 250px;">
+              <h3 style="margin: 0 0 8px 0; font-weight: 700; font-size: 15px; color: #111827;">
                 ${checkpoint.visited ? '✓ ' : '⏳ '}${checkpoint.name}
               </h3>
               
-              <div style="background: ${checkpoint.visited ? '#10b981' : '#ef4444'}; color: white; padding: 6px 10px; border-radius: 6px; margin: 0 0 10px 0; font-weight: bold; font-size: 12px; text-align: center;">
+              <div style="background: ${checkpoint.visited ? '#10b981' : '#ef4444'}; color: white; padding: 8px 12px; border-radius: 6px; margin: 0 0 12px 0; font-weight: bold; font-size: 13px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
                 ${checkpoint.visited ? '✓ PONTO CONCLUÍDO' : '⏳ RONDA NÃO FINALIZADA'}
               </div>
               
-              <div style="margin: 8px 0;">
-                <p style="margin: 0 0 6px 0; font-size: 12px; color: ${checkpoint.visited ? '#10b981' : '#ef4444'}; font-weight: bold;">
-                  Status: ${checkpoint.visited ? 'CONCLUÍDO' : 'PENDENTE'}
+              <div style="margin: 10px 0; background: #f9fafb; padding: 10px; border-radius: 6px;">
+                <p style="margin: 0 0 6px 0; font-size: 12px; color: ${checkpoint.visited ? '#059669' : '#dc2626'}; font-weight: 700;">
+                  Status: ${checkpoint.visited ? 'CONCLUÍDO ✓' : 'PENDENTE ⏳'}
                 </p>
-                <p style="margin: 0 0 4px 0; font-size: 11px; color: #1f2937;">
-                  <strong style="color: #1f2937;">Ordem:</strong> <span style="color: #4b5563;">#${checkpoint.order_index}</span>
+                <p style="margin: 0 0 4px 0; font-size: 11px; color: #111827;">
+                  <strong style="color: #111827;">Ordem:</strong> <span style="color: #374151; font-weight: 600;">#${checkpoint.order_index}</span>
                 </p>
-                <p style="margin: 0 0 4px 0; font-size: 11px; color: #1f2937;">
-                  <strong style="color: #1f2937;">ID Ronda:</strong> <span style="color: #4b5563;">${checkpoint.round_id.substring(0, 8)}...</span>
+                <p style="margin: 0 0 4px 0; font-size: 11px; color: #111827;">
+                  <strong style="color: #111827;">Cliente:</strong> <span style="color: #374151; font-weight: 600;">${checkpoint.client_name || checkpoint.name}</span>
                 </p>
-                <p style="margin: 4px 0 0 0; font-size: 10px; color: #1f2937;">
-                  <strong style="color: #1f2937;">📍 Coordenadas:</strong><br/>
-                  <span style="color: #4b5563;">${checkpoint.lat.toFixed(6)}, ${checkpoint.lng.toFixed(6)}</span>
+                ${checkpoint.client_address ? `
+                  <p style="margin: 0 0 4px 0; font-size: 10px; color: #111827;">
+                    <strong style="color: #111827;">📍 Endereço:</strong><br/>
+                    <span style="color: #6b7280; line-height: 1.4;">${checkpoint.client_address}</span>
+                  </p>
+                ` : ''}
+                <p style="margin: 4px 0 0 0; font-size: 10px; color: #111827;">
+                  <strong style="color: #111827;">🗺️ Coordenadas:</strong><br/>
+                  <span style="color: #6b7280; font-family: monospace;">${checkpoint.lat.toFixed(6)}, ${checkpoint.lng.toFixed(6)}</span>
                 </p>
               </div>
               
               ${!checkpoint.visited ? `
-                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
-                  <p style="margin: 0; font-size: 10px; color: #ef4444; font-weight: 600; font-style: italic;">
+                <div style="margin-top: 10px; padding: 8px 10px; background: #fef2f2; border-left: 3px solid #ef4444; border-radius: 4px;">
+                  <p style="margin: 0; font-size: 11px; color: #991b1b; font-weight: 600;">
                     ⚠️ Aguardando visita do tático
                   </p>
                 </div>
               ` : `
-                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
-                  <p style="margin: 0; font-size: 10px; color: #10b981; font-weight: 600; font-style: italic;">
+                <div style="margin-top: 10px; padding: 8px 10px; background: #f0fdf4; border-left: 3px solid #10b981; border-radius: 4px;">
+                  <p style="margin: 0; font-size: 11px; color: #065f46; font-weight: 600;">
                     ✓ Ronda finalizada com sucesso
                   </p>
                 </div>
