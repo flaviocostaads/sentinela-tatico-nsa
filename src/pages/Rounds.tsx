@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import RoundRouteDetails from "@/components/Dashboard/RoundRouteDetails";
+import CreateRoundDialog from "@/components/TacticApp/CreateRoundDialog";
 
 interface Round {
   id: string;
@@ -85,9 +86,6 @@ const Rounds = () => {
   const [templateClients, setTemplateClients] = useState<Record<string, TemplateClient[]>>({});
   const [routeDetailsOpen, setRouteDetailsOpen] = useState(false);
   const [selectedRouteTemplate, setSelectedRouteTemplate] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    template_id: ""
-  });
   const [editingRound, setEditingRound] = useState<Round | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editFormData, setEditFormData] = useState({
@@ -260,71 +258,6 @@ const Rounds = () => {
     const hours = Math.floor(diff / 60);
     const minutes = diff % 60;
     return `${hours}h ${minutes}m`;
-  };
-
-  const handleNewRound = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.template_id) {
-      toast({
-        title: "Erro",
-        description: "Selecione um template de ronda",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    try {
-      const selectedTemplate = templates.find(t => t.id === formData.template_id);
-      
-      if (!selectedTemplate) {
-        throw new Error("Template não encontrado");
-      }
-
-      if (!selectedTemplate.round_template_checkpoints || selectedTemplate.round_template_checkpoints.length === 0) {
-        toast({
-          title: "Erro",
-          description: "Template sem checkpoints configurados. Configure checkpoints antes de criar a ronda.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Criar ronda sem user_id e sem veículo - disponível para todos os táticos
-      const roundData = {
-        template_id: formData.template_id,
-        user_id: null, // NULL = disponível para qualquer tático
-        vehicle_id: null, // Será escolhido pelo tático ao iniciar
-        vehicle: null as any, // Será definido ao iniciar a ronda
-        status: 'pending' as const,
-        round_number: 1,
-        client_id: selectedTemplate.round_template_checkpoints[0]?.client_id,
-        current_checkpoint_index: 0,
-        requires_signature: selectedTemplate.requires_signature || false
-      };
-
-      const { error: roundError } = await supabase
-        .from("rounds")
-        .insert([roundData]);
-
-      if (roundError) throw roundError;
-
-      toast({
-        title: "Sucesso",
-        description: "Ronda criada com sucesso! Disponível para todos os táticos.",
-      });
-
-      setCreateRoundDialogOpen(false);
-      setFormData({ template_id: "" });
-      fetchRounds();
-    } catch (error) {
-      console.error("Error creating rounds:", error);
-      toast({
-        title: "Erro",
-        description: error instanceof Error ? error.message : "Erro ao criar rondas",
-        variant: "destructive",
-      });
-    }
   };
 
   const toggleTemplateStatus = async (templateId: string, active: boolean) => {
@@ -547,48 +480,13 @@ const Rounds = () => {
                 Templates de Ronda
               </Button>
 
-              <Dialog open={createRoundDialogOpen} onOpenChange={setCreateRoundDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button className="bg-tactical-green hover:bg-tactical-green/90">
-                    <Play className="w-4 h-4 mr-2" />
-                    Criar Rondas
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Criar Rondas a partir de Template</DialogTitle>
-                  </DialogHeader>
-                  <form onSubmit={handleNewRound} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="template">Template de Ronda</Label>
-                      <Select value={formData.template_id} onValueChange={(value) => setFormData({ ...formData, template_id: value })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione um template ativo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {templates.filter(t => t.active).map((template) => (
-                           <SelectItem key={template.id} value={template.id}>
-                             {template.name}
-                           </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="text-sm text-muted-foreground p-3 bg-muted rounded-md">
-                      <p>💡 <strong>Atenção:</strong> Esta ronda ficará disponível para <strong>todos os táticos</strong>. O tático escolherá o veículo ao iniciar a ronda.</p>
-                    </div>
-                    
-                    <Button 
-                      type="submit" 
-                      className="w-full bg-tactical-green hover:bg-tactical-green/90"
-                      disabled={!formData.template_id}
-                    >
-                      Criar Ronda
-                    </Button>
-                  </form>
-                </DialogContent>
-              </Dialog>
+              <Button 
+                onClick={() => setCreateRoundDialogOpen(true)}
+                className="bg-tactical-green hover:bg-tactical-green/90"
+              >
+                <Play className="w-4 h-4 mr-2" />
+                Criar Rondas
+              </Button>
               
               {/* Dialog de Edição de Ronda */}
               <Dialog open={editDialogOpen} onOpenChange={(open) => {
@@ -1115,6 +1013,16 @@ const Rounds = () => {
           </Tabs>
         </main>
       </div>
+
+      {/* Create Round Dialog */}
+      <CreateRoundDialog
+        isOpen={createRoundDialogOpen}
+        onClose={() => setCreateRoundDialogOpen(false)}
+        onRoundCreated={() => {
+          setCreateRoundDialogOpen(false);
+          fetchRounds();
+        }}
+      />
     </div>
   );
 };
