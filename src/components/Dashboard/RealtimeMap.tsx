@@ -144,6 +144,36 @@ const RealtimeMap = () => {
     }
   }, [roundCheckpoints]);
 
+  // Listen for checkpoint visit changes in real-time
+  useEffect(() => {
+    console.log('🔄 Setting up real-time checkpoint visits subscription');
+    
+    const checkpointVisitsChannel = supabase
+      .channel('checkpoint-visits-realtime-map')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'checkpoint_visits'
+      }, (payload) => {
+        console.log('📍 Real-time checkpoint visit change detected:', payload);
+        
+        // Re-fetch checkpoints when a visit is created/updated
+        if (map.current && userLocations.length > 0) {
+          const activeRounds = userLocations.map(loc => loc.rounds).filter(Boolean);
+          if (activeRounds.length > 0) {
+            console.log('🔄 Refreshing checkpoints due to visit change');
+            fetchRoundCheckpoints(activeRounds);
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      console.log('🔄 Cleaning up checkpoint visits subscription');
+      supabase.removeChannel(checkpointVisitsChannel);
+    };
+  }, [userLocations]); // Re-create subscription when userLocations change
+
   const initializeMap = () => {
     if (!mapContainer.current || map.current) return;
 
@@ -756,26 +786,27 @@ const RealtimeMap = () => {
                 <p style="margin: 0 0 6px 0; font-size: 12px; color: ${checkpoint.visited ? '#10b981' : '#ef4444'}; font-weight: bold;">
                   Status: ${checkpoint.visited ? 'CONCLUÍDO' : 'PENDENTE'}
                 </p>
-                <p style="margin: 0 0 4px 0; font-size: 11px; color: #4b5563;">
-                  <strong>Ordem:</strong> #${checkpoint.order_index}
+                <p style="margin: 0 0 4px 0; font-size: 11px; color: #1f2937;">
+                  <strong style="color: #1f2937;">Ordem:</strong> <span style="color: #4b5563;">#${checkpoint.order_index}</span>
                 </p>
-                <p style="margin: 0 0 4px 0; font-size: 11px; color: #4b5563;">
-                  <strong>ID Ronda:</strong> ${checkpoint.round_id.substring(0, 8)}...
+                <p style="margin: 0 0 4px 0; font-size: 11px; color: #1f2937;">
+                  <strong style="color: #1f2937;">ID Ronda:</strong> <span style="color: #4b5563;">${checkpoint.round_id.substring(0, 8)}...</span>
                 </p>
-                <p style="margin: 4px 0 0 0; font-size: 10px; color: #6b7280;">
-                  📍 ${checkpoint.lat.toFixed(6)}, ${checkpoint.lng.toFixed(6)}
+                <p style="margin: 4px 0 0 0; font-size: 10px; color: #1f2937;">
+                  <strong style="color: #1f2937;">📍 Coordenadas:</strong><br/>
+                  <span style="color: #4b5563;">${checkpoint.lat.toFixed(6)}, ${checkpoint.lng.toFixed(6)}</span>
                 </p>
               </div>
               
               ${!checkpoint.visited ? `
                 <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
-                  <p style="margin: 0; font-size: 10px; color: #ef4444; font-style: italic;">
+                  <p style="margin: 0; font-size: 10px; color: #ef4444; font-weight: 600; font-style: italic;">
                     ⚠️ Aguardando visita do tático
                   </p>
                 </div>
               ` : `
                 <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #e5e7eb;">
-                  <p style="margin: 0; font-size: 10px; color: #10b981; font-style: italic;">
+                  <p style="margin: 0; font-size: 10px; color: #10b981; font-weight: 600; font-style: italic;">
                     ✓ Ronda finalizada com sucesso
                   </p>
                 </div>
