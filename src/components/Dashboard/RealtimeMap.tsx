@@ -300,16 +300,37 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
     console.log('Final clients in active rounds:', Array.from(clientsInActiveRounds));
     console.log('All clients to display:', clients);
 
+    // Fetch checkpoint counts and details for all clients
+    const clientCheckpointData: { [key: string]: { count: number, checkpoints: any[] } } = {};
+    
+    for (const client of clients) {
+      const { data: checkpoints, error } = await supabase
+        .from("checkpoints")
+        .select("id, name, order_index")
+        .eq("client_id", client.id)
+        .eq("active", true)
+        .order("order_index");
+      
+      if (!error && checkpoints) {
+        clientCheckpointData[client.id] = {
+          count: checkpoints.length,
+          checkpoints: checkpoints
+        };
+      }
+    }
+
     clients.forEach(client => {
       if (client.lat && client.lng) {
         const isInActiveRound = clientsInActiveRounds.has(client.id);
+        const checkpointInfo = clientCheckpointData[client.id] || { count: 0, checkpoints: [] };
         
-        console.log(`Client ${client.name} (${client.id}): isInActiveRound = ${isInActiveRound}`);
+        console.log(`Client ${client.name} (${client.id}): isInActiveRound = ${isInActiveRound}, checkpoints = ${checkpointInfo.count}`);
         
-        // Create client marker with different colors based on whether it's in an active round
+        // Create client marker with number badge
         const el = document.createElement('div');
-        el.style.width = '20px';
-        el.style.height = '20px';
+        el.style.position = 'relative';
+        el.style.width = '28px';
+        el.style.height = '28px';
         el.style.borderRadius = '50%';
         el.style.backgroundColor = isInActiveRound ? 'hsl(var(--tactical-red))' : 'hsl(var(--tactical-blue))';
         el.style.border = '3px solid white';
@@ -317,6 +338,13 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
           '0 0 15px hsl(var(--tactical-red) / 0.5), 0 2px 10px rgba(0,0,0,0.3)' : 
           '0 2px 10px rgba(0,0,0,0.3)';
         el.style.cursor = 'pointer';
+        el.style.display = 'flex';
+        el.style.alignItems = 'center';
+        el.style.justifyContent = 'center';
+        el.style.fontWeight = 'bold';
+        el.style.fontSize = '14px';
+        el.style.color = 'white';
+        el.textContent = checkpointInfo.count.toString();
 
         // Add pulsing effect for clients in active rounds
         if (isInActiveRound) {
@@ -326,17 +354,31 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
         // Highlight marker if it matches search or is highlighted
         const isHighlighted = highlightedMarker === client.id;
         if (isHighlighted) {
-          el.style.width = '32px';
-          el.style.height = '32px';
+          el.style.width = '40px';
+          el.style.height = '40px';
           el.style.boxShadow = '0 0 25px rgba(255, 215, 0, 0.9), 0 0 50px rgba(255, 215, 0, 0.6), 0 2px 15px rgba(0,0,0,0.4)';
           el.style.border = '4px solid gold';
           el.style.zIndex = '9999';
+          el.style.fontSize = '16px';
+        }
+
+        // Build checkpoint list HTML
+        let checkpointsListHTML = '';
+        if (checkpointInfo.checkpoints.length > 0) {
+          checkpointsListHTML = `
+            <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e5e7eb;">
+              <strong style="color: #111827; font-size: 12px;">📍 Pontos de Ronda (${checkpointInfo.count}):</strong>
+              <ul style="margin: 5px 0 0 0; padding-left: 20px; font-size: 11px; color: #4b5563;">
+                ${checkpointInfo.checkpoints.map((cp: any) => `<li>${cp.name}</li>`).join('')}
+              </ul>
+            </div>
+          `;
         }
 
         const marker = new mapboxgl.Marker(el)
           .setLngLat([client.lng, client.lat])
           .setPopup(
-            new mapboxgl.Popup({ offset: 25 }).setHTML(`
+            new mapboxgl.Popup({ offset: 25, maxWidth: '300px' }).setHTML(`
               <div style="padding: 10px; ${isInActiveRound ? 'border: 3px solid hsl(var(--tactical-red)); background: linear-gradient(135deg, #fef2f2, #ffffff);' : ''}">
                 <h3 style="margin: 0 0 5px 0; font-weight: 600; color: #111827; ${isInActiveRound ? 'color: hsl(var(--tactical-red));' : ''}">${isInActiveRound ? '🎯 ' : ''}${client.name}</h3>
                 ${isInActiveRound ? '<div style="background: hsl(var(--tactical-red)); color: white; padding: 4px 8px; border-radius: 4px; margin: 0 0 5px 0; font-weight: bold; font-size: 11px; text-align: center;">🎯 INCLUÍDO NA RONDA ATIVA</div>' : ''}
@@ -345,6 +387,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
                   <strong style="color: #111827;">🗺️ Coordenadas:</strong><br/>
                   ${client.lat.toFixed(6)}, ${client.lng.toFixed(6)}
                 </p>
+                ${checkpointsListHTML}
               </div>
             `)
           )

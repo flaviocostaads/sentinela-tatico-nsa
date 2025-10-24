@@ -44,7 +44,7 @@ const RoundCheckpointsList = ({
 
   const fetchCheckpoints = async () => {
     try {
-      console.log("🔍 Fetching checkpoints for client:", clientId, "round:", roundId);
+      console.log("🔍 [RoundCheckpointsList] Fetching checkpoints for client:", clientId, "round:", roundId);
       
       // Buscar checkpoints físicos do cliente
       const { data: checkpointsData, error } = await supabase
@@ -55,11 +55,12 @@ const RoundCheckpointsList = ({
         .order("order_index");
 
       if (error) {
-        console.error("❌ Error fetching checkpoints:", error);
+        console.error("❌ [RoundCheckpointsList] Error fetching checkpoints:", error);
         throw error;
       }
 
-      console.log(`📍 Physical checkpoints found for client ${clientId}:`, checkpointsData?.length || 0, checkpointsData);
+      console.log(`📍 [RoundCheckpointsList] Physical checkpoints found for client ${clientId}:`, checkpointsData?.length || 0);
+      console.log(`📋 [RoundCheckpointsList] Checkpoint details:`, checkpointsData);
 
       if (checkpointsData && checkpointsData.length > 0) {
         const formattedCheckpoints = checkpointsData.map((cp, index) => ({
@@ -71,14 +72,16 @@ const RoundCheckpointsList = ({
           order_index: cp.order_index,
           checklist_items: cp.checklist_items
         }));
-        console.log(`✅ Using ${formattedCheckpoints.length} physical checkpoints:`, formattedCheckpoints);
+        console.log(`✅ [RoundCheckpointsList] Setting ${formattedCheckpoints.length} checkpoints:`, 
+          formattedCheckpoints.map(c => `${c.name} (${c.id})`));
         setCheckpoints(formattedCheckpoints);
       } else {
-        console.warn(`⚠️ No physical checkpoints found for client ${clientId}`);
+        console.warn(`⚠️ [RoundCheckpointsList] No physical checkpoints found for client ${clientId}`);
+        console.warn(`⚠️ [RoundCheckpointsList] This means the client has no active checkpoints in the database`);
         setCheckpoints([]);
       }
     } catch (error) {
-      console.error("❌ Error fetching checkpoints:", error);
+      console.error("❌ [RoundCheckpointsList] Error fetching checkpoints:", error);
       toast({
         title: "Erro",
         description: "Erro ao carregar pontos de ronda",
