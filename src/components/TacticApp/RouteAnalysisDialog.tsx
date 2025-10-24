@@ -1,0 +1,316 @@
+import { useState, useEffect } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useMapboxDirections } from '@/hooks/useMapboxDirections';
+import { 
+  formatDistance, 
+  formatDuration, 
+  formatCost, 
+  calculateOperationalCost,
+  getMapboxProfile 
+} from '@/utils/routeCalculations';
+import { 
+  Route, 
+  Clock, 
+  Fuel, 
+  DollarSign, 
+  MapPin, 
+  TrendingUp,
+  Navigation,
+  Loader2,
+  AlertCircle 
+} from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
+interface Checkpoint {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+}
+
+interface RouteAnalysisDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  checkpoints: Checkpoint[];
+  vehicleType: 'car' | 'motorcycle' | 'on_foot';
+  roundName?: string;
+}
+
+export const RouteAnalysisDialog = ({
+  open,
+  onOpenChange,
+  checkpoints,
+  vehicleType,
+  roundName
+}: RouteAnalysisDialogProps) => {
+  const { 
+    calculateRoundDistance, 
+    calculateRoundCost,
+    loading 
+  } = useMapboxDirections();
+  
+  const [routeData, setRouteData] = useState<any>(null);
+  const [costData, setCostData] = useState<any>(null);
+  const [operationalCost, setOperationalCost] = useState<any>(null);
+
+  useEffect(() => {
+    if (open && checkpoints.length >= 2) {
+      analyzeRoute();
+    }
+  }, [open, checkpoints]);
+
+  const analyzeRoute = async () => {
+    const profile = getMapboxProfile(vehicleType);
+    
+    const coordinates = checkpoints.map(cp => ({
+      latitude: cp.latitude,
+      longitude: cp.longitude
+    }));
+
+    const result = await calculateRoundDistance(coordinates, profile);
+    
+    if (result) {
+      setRouteData(result);
+      
+      // Calcular custo de combustível (apenas para veículos motorizados)
+      if (vehicleType !== 'on_foot') {
+        const fuelPrice = 5.50; // R$ por litro
+        const consumption = vehicleType === 'motorcycle' ? 30 : 10; // km/l
+        const cost = calculateRoundCost(result.distanceKm, vehicleType, fuelPrice, consumption);
+        setCostData(cost);
+      } else {
+        setCostData(null);
+      }
+      
+      // Calcular custo operacional total
+      if (vehicleType !== 'on_foot') {
+        const opCost = calculateOperationalCost({
+          distanceKm: result.distanceKm,
+          durationHours: result.durationHours,
+          fuelCost: costData?.estimatedCost || 0,
+          hourlyWage: 15,
+          maintenanceCostPerKm: vehicleType === 'motorcycle' ? 0.20 : 0.30,
+          vehicleDepreciationPerKm: vehicleType === 'motorcycle' ? 0.30 : 0.50
+        });
+        setOperationalCost(opCost);
+      } else {
+        // Para rondas a pé, apenas considerar mão de obra
+        const opCost = calculateOperationalCost({
+          distanceKm: result.distanceKm,
+          durationHours: result.durationHours,
+          fuelCost: 0,
+          hourlyWage: 15,
+          maintenanceCostPerKm: 0,
+          vehicleDepreciationPerKm: 0
+        });
+        setOperationalCost(opCost);
+      }
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Navigation className="h-5 w-5" />
+            Análise de Rota {roundName && `- ${roundName}`}
+          </DialogTitle>
+          <DialogDescription>
+            Análise detalhada de distância, tempo e custos estimados
+          </DialogDescription>
+        </DialogHeader>
+
+        <ScrollArea className="max-h-[calc(90vh-150px)]">
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="ml-2">Calculando rota...</span>
+            </div>
+          ) : !routeData ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <AlertCircle className="h-12 w-12 mb-4" />
+              <p>Não foi possível calcular a rota</p>
+              <p className="text-sm">Verifique se há pelo menos 2 checkpoints</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Informações da Rota */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Route className="h-5 w-5" />
+                    Informações da Rota
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Distância Total</p>
+                      <p className="text-2xl font-bold text-primary">
+                        {routeData.distanceKm.toFixed(2)} km
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatDistance(routeData.totalDistance)}
+                      </p>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Tempo Estimado</p>
+                      <p className="text-2xl font-bold text-primary">
+                        {formatDuration(routeData.totalDuration)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {routeData.durationHours.toFixed(2)} horas
+                      </p>
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div className="grid grid-cols-3 gap-2 text-sm">
+                    <div>
+                      <p className="text-muted-foreground">Checkpoints</p>
+                      <p className="font-semibold">{checkpoints.length}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Veículo</p>
+                      <Badge variant="outline">
+                        {vehicleType === 'car' ? 'Carro' : 
+                         vehicleType === 'motorcycle' ? 'Moto' : 'A pé'}
+                      </Badge>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Velocidade Média</p>
+                      <p className="font-semibold">
+                        {(routeData.distanceKm / routeData.durationHours).toFixed(1)} km/h
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Análise de Custos de Combustível */}
+              {costData && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Fuel className="h-5 w-5" />
+                      Análise de Combustível
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground">Consumo Estimado</p>
+                        <p className="text-xl font-bold">{costData.fuelConsumption} L</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Custo de Combustível</p>
+                        <p className="text-xl font-bold text-green-600">
+                          {formatCost(costData.estimatedCost)}
+                        </p>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Custo por Km</p>
+                      <p className="text-lg font-semibold">{formatCost(costData.costPerKm)}/km</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Custo Operacional Total */}
+              {operationalCost && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <DollarSign className="h-5 w-5" />
+                      Custo Operacional Total
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Combustível</span>
+                        <span className="font-semibold">{formatCost(operationalCost.fuelCost)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Mão de Obra</span>
+                        <span className="font-semibold">{formatCost(operationalCost.laborCost)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Manutenção</span>
+                        <span className="font-semibold">{formatCost(operationalCost.maintenanceCost)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Depreciação</span>
+                        <span className="font-semibold">{formatCost(operationalCost.depreciationCost)}</span>
+                      </div>
+                      
+                      <Separator />
+                      
+                      <div className="flex justify-between">
+                        <span className="font-bold">Total</span>
+                        <span className="text-xl font-bold text-primary">
+                          {formatCost(operationalCost.totalCost)}
+                        </span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Lista de Checkpoints */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <MapPin className="h-5 w-5" />
+                    Pontos da Rota ({checkpoints.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {checkpoints.map((checkpoint, index) => (
+                      <div key={checkpoint.id} className="flex items-center gap-3 text-sm">
+                        <Badge variant={index === 0 ? "default" : index === checkpoints.length - 1 ? "destructive" : "secondary"}>
+                          {index + 1}
+                        </Badge>
+                        <span className="flex-1">{checkpoint.name}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {checkpoint.latitude.toFixed(6)}, {checkpoint.longitude.toFixed(6)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </ScrollArea>
+
+        <div className="flex justify-end gap-2 pt-4">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Fechar
+          </Button>
+          {routeData && (
+            <Button onClick={analyzeRoute} disabled={loading}>
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Recalcular
+            </Button>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
