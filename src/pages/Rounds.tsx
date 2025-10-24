@@ -185,7 +185,8 @@ const Rounds = () => {
 
   const fetchTemplateClients = async (templateId: string) => {
     try {
-      const { data, error } = await supabase
+      // 1. Buscar os clientes do template
+      const { data: templateData, error: templateError } = await supabase
         .from("round_template_checkpoints")
         .select(`
           client_id,
@@ -199,31 +200,45 @@ const Rounds = () => {
         `)
         .eq("template_id", templateId);
 
-      if (error) throw error;
+      if (templateError) throw templateError;
 
-      // Group by client and count checkpoints
-      const clientMap = new Map<string, TemplateClient>();
-      
-      data?.forEach((item: any) => {
-        const client = item.clients;
-        if (client) {
-          if (clientMap.has(client.id)) {
-            const existing = clientMap.get(client.id)!;
-            existing.checkpoints_count += 1;
-          } else {
-            clientMap.set(client.id, {
-              id: client.id,
-              name: client.name,
-              address: client.address,
-              checkpoints_count: 1
-            });
-          }
+      // 2. Pegar IDs únicos dos clientes
+      const uniqueClients = new Map<string, any>();
+      templateData?.forEach((item: any) => {
+        if (item.clients && !uniqueClients.has(item.clients.id)) {
+          uniqueClients.set(item.clients.id, item.clients);
         }
       });
 
+      const clientIds = Array.from(uniqueClients.keys());
+
+      // 3. Buscar a quantidade real de checkpoints físicos para cada cliente
+      const clientsWithCheckpoints: TemplateClient[] = [];
+      
+      for (const clientId of clientIds) {
+        const { data: checkpointsData, error: checkpointsError } = await supabase
+          .from("checkpoints")
+          .select("id")
+          .eq("client_id", clientId)
+          .eq("active", true);
+
+        if (checkpointsError) {
+          console.error("Error fetching checkpoints for client:", clientId, checkpointsError);
+          continue;
+        }
+
+        const client = uniqueClients.get(clientId);
+        clientsWithCheckpoints.push({
+          id: client.id,
+          name: client.name,
+          address: client.address,
+          checkpoints_count: checkpointsData?.length || 0
+        });
+      }
+
       setTemplateClients(prev => ({
         ...prev,
-        [templateId]: Array.from(clientMap.values())
+        [templateId]: clientsWithCheckpoints
       }));
     } catch (error) {
       console.error("Error fetching template clients:", error);
