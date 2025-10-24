@@ -5,7 +5,7 @@ import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
 import StatsCard from "@/components/Dashboard/StatsCard";
 import ActiveRoundsCard from "@/components/Dashboard/ActiveRoundsCard";
-import RealtimeMap from "@/components/Dashboard/RealtimeMap";
+import MapProviderWrapper from "@/components/Dashboard/MapProviderWrapper";
 import RoundDetails from "@/components/Dashboard/RoundDetails";
 import MapView from "@/components/MapView";
 import { Round } from "@/types";
@@ -192,7 +192,7 @@ const Index = () => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Mapa */}
             <div className="lg:col-span-2">
-              <RealtimeMap />
+              <MapProviderWrapper />
             </div>
 
             {/* Rondas Ativas ou Detalhes */}

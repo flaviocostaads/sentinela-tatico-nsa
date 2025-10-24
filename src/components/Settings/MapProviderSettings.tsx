@@ -6,13 +6,14 @@ import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useMapProvider, MapProvider } from '@/hooks/useMapProvider';
-import { InfoIcon, MapPin, Navigation } from 'lucide-react';
+import { InfoIcon, MapPin, Navigation, Eye, EyeOff } from 'lucide-react';
 
 const MapProviderSettings = () => {
   const { provider, googleMapsApiKey, loading, updateMapProvider } = useMapProvider();
   const [selectedProvider, setSelectedProvider] = useState<MapProvider>('mapbox');
   const [apiKey, setApiKey] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
 
   useEffect(() => {
     if (!loading) {
@@ -96,13 +97,29 @@ const MapProviderSettings = () => {
           <div className="space-y-4 p-4 border rounded-lg bg-accent/50">
             <div className="space-y-2">
               <Label htmlFor="google-api-key">Google Maps API Key</Label>
-              <Input
-                id="google-api-key"
-                type="password"
-                placeholder="Insira sua Google Maps API Key"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-              />
+              <div className="relative">
+                <Input
+                  id="google-api-key"
+                  type={showApiKey ? "text" : "password"}
+                  placeholder="Insira sua Google Maps API Key"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="pr-10"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                  onClick={() => setShowApiKey(!showApiKey)}
+                >
+                  {showApiKey ? (
+                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </Button>
+              </div>
               <p className="text-xs text-muted-foreground">
                 Obtenha sua API key em:{' '}
                 <a

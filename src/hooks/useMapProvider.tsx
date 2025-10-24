@@ -25,8 +25,9 @@ export const useMapProvider = () => {
       
       const { data, error } = await supabase
         .from('company_settings')
-        .select('map_provider, google_maps_api_key')
-        .single();
+        .select('id, map_provider, google_maps_api_key')
+        .limit(1)
+        .maybeSingle();
 
       if (error) {
         console.error('Error fetching map provider config:', error);
@@ -46,15 +47,43 @@ export const useMapProvider = () => {
 
   const updateMapProvider = async (newProvider: MapProvider, apiKey?: string) => {
     try {
-      const { error } = await supabase
+      // Get the first company_settings record
+      const { data: settings, error: fetchError } = await supabase
         .from('company_settings')
-        .update({
-          map_provider: newProvider,
-          ...(apiKey && { google_maps_api_key: apiKey })
-        })
-        .eq('id', (await supabase.from('company_settings').select('id').single()).data?.id);
+        .select('id')
+        .limit(1)
+        .maybeSingle();
 
-      if (error) throw error;
+      if (fetchError) throw fetchError;
+
+      let settingsId: string;
+
+      if (!settings) {
+        // Create a new settings record if none exists
+        const { data: newSettings, error: createError } = await supabase
+          .from('company_settings')
+          .insert({
+            map_provider: newProvider,
+            ...(apiKey && { google_maps_api_key: apiKey })
+          })
+          .select('id')
+          .single();
+
+        if (createError) throw createError;
+        settingsId = newSettings.id;
+      } else {
+        // Update existing settings
+        settingsId = settings.id;
+        const { error: updateError } = await supabase
+          .from('company_settings')
+          .update({
+            map_provider: newProvider,
+            ...(apiKey && { google_maps_api_key: apiKey })
+          })
+          .eq('id', settingsId);
+
+        if (updateError) throw updateError;
+      }
 
       setProvider(newProvider);
       if (apiKey) setGoogleMapsApiKey(apiKey);
