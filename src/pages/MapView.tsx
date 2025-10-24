@@ -8,7 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
 import RealTimeRoundTracking from "@/components/Dashboard/RealTimeRoundTracking";
-import RealtimeMap from "@/components/Dashboard/RealtimeMap";
+import MapProviderWrapper from "@/components/Dashboard/MapProviderWrapper";
 import EmergencyNotification from "@/components/Dashboard/EmergencyNotification";
 
 interface Round {
@@ -144,8 +144,8 @@ const MapViewPage = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Mapa em Tempo Real */}
-            <div className="lg:col-span-2">
-              <RealtimeMap />
+          <div className="lg:col-span-2">
+              <MapProviderWrapper />
             </div>
 
             {/* Painel lateral */}
@@ -269,7 +269,7 @@ const MapViewPage = () => {
 
           {expanded && (
             <div className="fixed inset-0 z-50 bg-background">
-              <RealtimeMap 
+              <MapProviderWrapper 
                 isExpanded={true} 
                 onClose={() => setExpanded(false)}
                 onOpenNewWindow={() => {

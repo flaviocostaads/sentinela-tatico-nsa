@@ -24,6 +24,10 @@ interface EmergencyIncident {
   priority: 'low' | 'medium' | 'high' | 'critical';
   status: string;
   reported_at: string;
+  lat?: number;
+  lng?: number;
+  title?: string;
+  description?: string;
 }
 
 export const useRealtimeMap = () => {
@@ -225,15 +229,16 @@ export const useRealtimeMap = () => {
   const fetchActiveEmergencies = async () => {
     try {
       const { data, error } = await supabase
-        .from("incidents")
-        .select("id, round_id, priority, status, reported_at")
-        .eq("status", "open")
-        .in("priority", ["medium", "high", "critical"]);
+        .from('incidents')
+        .select('*, lat, lng, title, description')
+        .eq('status', 'open')
+        .in('priority', ['medium', 'high', 'critical'])
+        .order('reported_at', { ascending: false });
 
       if (error) throw error;
       setActiveEmergencies(data || []);
     } catch (error) {
-      console.error("Error fetching active emergencies:", error);
+      console.error('Error fetching active emergencies:', error);
     }
   };
 

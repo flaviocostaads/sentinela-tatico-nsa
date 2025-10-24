@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import Header from "@/components/Layout/Header";
 import Sidebar from "@/components/Layout/Sidebar";
 import { ApiIntegrationsTab } from '@/components/Settings/ApiIntegrationsTab';
+import MapProviderSettings from '@/components/Settings/MapProviderSettings';
 
 const Settings = () => {
   const [loading, setLoading] = useState(false);
@@ -320,7 +321,7 @@ const Settings = () => {
           </div>
 
           <Tabs defaultValue="company" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-4 tactical-card">
+            <TabsList className="grid w-full grid-cols-5 tactical-card">
               <TabsTrigger value="company" className="flex items-center space-x-2">
                 <Building className="w-4 h-4" />
                 <span>Empresa</span>
@@ -328,6 +329,10 @@ const Settings = () => {
               <TabsTrigger value="system" className="flex items-center space-x-2">
                 <Monitor className="w-4 h-4" />
                 <span>Sistema</span>
+              </TabsTrigger>
+              <TabsTrigger value="maps" className="flex items-center space-x-2">
+                <MapPin className="w-4 h-4" />
+                <span>Mapas</span>
               </TabsTrigger>
               <TabsTrigger value="api" className="flex items-center space-x-2">
                 <Key className="w-4 h-4" />
@@ -711,6 +716,10 @@ const Settings = () => {
                   </CardContent>
                 </Card>
               </div>
+            </TabsContent>
+
+            <TabsContent value="maps">
+              <MapProviderSettings />
             </TabsContent>
 
             <TabsContent value="api">

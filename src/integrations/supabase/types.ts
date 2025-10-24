@@ -231,10 +231,12 @@ export type Database = {
           description: string | null
           email: string | null
           favicon_url: string | null
+          google_maps_api_key: string | null
           header_logo_url: string | null
           id: string
           login_logo_url: string | null
           logo_url: string | null
+          map_provider: string | null
           phone: string | null
           qr_logo_url: string | null
           report_logo_url: string | null
@@ -247,10 +249,12 @@ export type Database = {
           description?: string | null
           email?: string | null
           favicon_url?: string | null
+          google_maps_api_key?: string | null
           header_logo_url?: string | null
           id?: string
           login_logo_url?: string | null
           logo_url?: string | null
+          map_provider?: string | null
           phone?: string | null
           qr_logo_url?: string | null
           report_logo_url?: string | null
@@ -263,10 +267,12 @@ export type Database = {
           description?: string | null
           email?: string | null
           favicon_url?: string | null
+          google_maps_api_key?: string | null
           header_logo_url?: string | null
           id?: string
           login_logo_url?: string | null
           logo_url?: string | null
+          map_provider?: string | null
           phone?: string | null
           qr_logo_url?: string | null
           report_logo_url?: string | null
