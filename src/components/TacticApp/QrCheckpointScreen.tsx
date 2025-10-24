@@ -50,17 +50,141 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
   const [signature, setSignature] = useState<string | null>(null);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [showQrScanner, setShowQrScanner] = useState(false);
+  const [isHoldingPanic, setIsHoldingPanic] = useState(false);
+  const [panicHoldProgress, setPanicHoldProgress] = useState(0);
+  const [currentLocation, setCurrentLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [activeRoundId, setActiveRoundId] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const PANIC_HOLD_DURATION = 2000; // 2 seconds
 
   useEffect(() => {
     fetchCheckpointData();
     // Auto-open QR scanner when component loads
     openQrScanner();
+    // Get location and active round for panic button
+    getCurrentLocationForPanic();
+    setActiveRoundId(roundId);
   }, [checkpointId]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (isHoldingPanic) {
+      interval = setInterval(() => {
+        setPanicHoldProgress(prev => {
+          const newProgress = prev + (100 / (PANIC_HOLD_DURATION / 50)); // Update every 50ms
+          return Math.min(newProgress, 100);
+        });
+      }, 50);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [isHoldingPanic]);
 
   const openQrScanner = () => {
     console.log("Opening integrated QR scanner...");
     setShowQrScanner(true);
+  };
+
+  const getCurrentLocationForPanic = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setCurrentLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          });
+        },
+        (error) => {
+          console.error("Error getting location:", error);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
+        }
+      );
+    }
+  };
+
+  const createPanicAlert = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      let locationData = currentLocation;
+      if (!locationData) {
+        // Try to get location immediately for emergency
+        try {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              timeout: 5000,
+              enableHighAccuracy: true
+            });
+          });
+          locationData = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+        } catch {
+          locationData = { lat: 0, lng: 0 }; // Default fallback
+        }
+      }
+
+      const emergencyData = {
+        round_id: activeRoundId || roundId,
+        title: "🚨 ALERTA DE PÂNICO - EMERGÊNCIA CRÍTICA",
+        description: `ATENÇÃO: Tático ativou botão de pânico durante checkpoint. Localização: ${locationData.lat.toFixed(6)}, ${locationData.lng.toFixed(6)}. Checkpoint: ${checkpoint?.clients?.name || 'Desconhecido'}. Resposta imediata necessária!`,
+        type: 'emergency' as const,
+        priority: 'critical' as const,
+        status: 'open',
+        lat: locationData.lat,
+        lng: locationData.lng
+      };
+
+      const { error } = await supabase
+        .from("incidents")
+        .insert([emergencyData]);
+
+      if (error) {
+        throw error;
+      }
+
+      // Silent success - no toast notification for tactic user
+      console.log("Panic alert created successfully from checkpoint screen");
+      
+    } catch (error) {
+      console.error("Error creating panic alert:", error);
+      // Silent error handling
+    }
+  };
+
+  const handlePanicMouseDown = () => {
+    setIsHoldingPanic(true);
+    setPanicHoldProgress(0);
+  };
+
+  const handlePanicMouseUp = () => {
+    if (isHoldingPanic) {
+      if (panicHoldProgress >= 100) {
+        // Panic button activated - create silent emergency alert
+        createPanicAlert();
+        // Reset progress silently
+        setPanicHoldProgress(0);
+      }
+    }
+    setIsHoldingPanic(false);
+    setPanicHoldProgress(0);
+  };
+
+  const handlePanicMouseLeave = () => {
+    setIsHoldingPanic(false);
+    setPanicHoldProgress(0);
   };
 
   const fetchCheckpointData = async () => {
@@ -924,14 +1048,60 @@ const QrCheckpointScreen = ({ checkpointId, roundId, onBack, onIncident }: QrChe
                 </div>
               </div>
             ) : (
-              <div className="text-center space-y-2">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                  <CheckCircle className="w-8 h-8 text-green-600" />
+              <div className="space-y-4">
+                <div className="text-center space-y-2">
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                    <CheckCircle className="w-8 h-8 text-green-600" />
+                  </div>
+                  <h3 className="font-semibold text-green-700">QR Code Confirmado</h3>
                 </div>
-                <h3 className="font-semibold text-green-700">QR Code Confirmado</h3>
-                <p className="text-sm text-muted-foreground">
-                  Presença confirmada. Complete as atividades abaixo.
-                </p>
+                
+                {/* Panic Button */}
+                <div className="relative pt-2">
+                  <Button
+                    onMouseDown={handlePanicMouseDown}
+                    onMouseUp={handlePanicMouseUp}
+                    onMouseLeave={handlePanicMouseLeave}
+                    onTouchStart={handlePanicMouseDown}
+                    onTouchEnd={handlePanicMouseUp}
+                    className="w-full h-14 bg-card hover:bg-accent border-2 border-tactical-red/20 rounded-xl flex items-center justify-center shadow-sm transition-colors group relative overflow-hidden"
+                    style={{
+                      background: panicHoldProgress > 0 
+                        ? `linear-gradient(90deg, hsl(var(--tactical-red)) ${panicHoldProgress}%, transparent ${panicHoldProgress}%)`
+                        : undefined
+                    }}
+                  >
+                    <div className="w-10 h-10 bg-tactical-red/10 rounded-lg flex items-center justify-center mr-3 group-hover:bg-tactical-red/20 transition-colors relative z-10">
+                      <AlertTriangle className="w-5 h-5 text-tactical-red" />
+                    </div>
+                    <div className="text-left relative z-10">
+                      <span className="text-base font-semibold block text-foreground">
+                        {panicHoldProgress > 0 ? "Ativando Pânico..." : "BOTÃO DE PÂNICO"}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {panicHoldProgress > 0 ? `${Math.round(panicHoldProgress)}%` : "Segure por 2 segundos"}
+                      </span>
+                    </div>
+                    
+                    {/* Visual progress indicator */}
+                    {panicHoldProgress > 0 && (
+                      <div 
+                        className="absolute inset-0 bg-tactical-red/20 transition-all duration-75"
+                        style={{ 
+                          width: `${panicHoldProgress}%`,
+                          background: `linear-gradient(90deg, 
+                            hsl(var(--tactical-red) / 0.3) 0%, 
+                            hsl(var(--tactical-red) / 0.1) 100%)`
+                        }}
+                      />
+                    )}
+                  </Button>
+                  
+                  {/* Instructions text */}
+                  <p className="text-xs text-muted-foreground text-center mt-2">
+                    Segure o botão por 2 segundos para ativar alerta de pânico silencioso
+                  </p>
+                </div>
               </div>
             )}
           </CardContent>
