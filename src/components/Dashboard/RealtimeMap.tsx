@@ -133,25 +133,26 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
     console.log('  - clients:', clients.length);
     console.log('  - roundCheckpoints:', roundCheckpoints.length);
 
-    // Use a small delay to batch updates and prevent duplicates
+    // Use a longer delay to batch updates and prevent duplicates/flickering
     const updateTimer = setTimeout(() => {
       console.log('📍 Executing unified map update');
       
       // 1. Update tactical user locations (always first)
       updateUserLocations();
       
-      // 2. Fetch checkpoints for active rounds
+      // 2. Fetch checkpoints ONLY for active rounds
       const activeRounds = userLocations.map(loc => loc.rounds).filter(Boolean);
       if (activeRounds.length > 0) {
         fetchRoundCheckpoints(activeRounds);
       } else {
         // Clear checkpoint markers if no active rounds
+        console.log('📍 No active rounds - clearing checkpoints');
         setRoundCheckpoints([]);
       }
       
       // 3. Update client markers (empresas) - SEMPRE VISÍVEIS
       updateClientMarkers();
-    }, 100);
+    }, 300); // Increased debounce delay to prevent flickering
 
     return () => clearTimeout(updateTimer);
   }, [userLocations, clients, highlightedMarker]);
@@ -159,10 +160,10 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
   // Separate effect for checkpoint markers only (triggered by data change)
   useEffect(() => {
     if (map.current && roundCheckpoints.length >= 0) {
-      // Small delay to ensure client markers are updated first
+      // Longer delay to ensure client markers are updated first and prevent flickering
       const timer = setTimeout(() => {
         updateRoundCheckpoints();
-      }, 150);
+      }, 400);
       return () => clearTimeout(timer);
     }
   }, [roundCheckpoints]);
@@ -264,7 +265,13 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
     console.log('🏢 Total clients to display:', clients.length);
     console.log('🏢 Current markers before clear:', clientMarkers.current.length);
 
-    // STEP 1: CLEAR ALL existing client markers completely
+    // STEP 1: Prevent duplicate updates with debouncing
+    if (clientMarkers.current.length > 0 && clients.length === clientMarkers.current.length) {
+      console.log('🏢 ⚠️ Skipping update - markers already up to date');
+      return;
+    }
+
+    // STEP 2: CLEAR ALL existing client markers completely
     clientMarkers.current.forEach(marker => {
       if (marker) {
         try {
@@ -665,18 +672,26 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
 
   const fetchRoundCheckpoints = async (activeRounds: any[]) => {
     try {
-      console.log('Fetching round checkpoints for active rounds:', activeRounds);
+      console.log('📍 === FETCHING CHECKPOINTS FOR ACTIVE ROUNDS ONLY ===');
+      console.log('Active rounds to process:', activeRounds);
       
-      const roundIds = activeRounds.map(r => r.id);
-      const templateIds = activeRounds.filter(r => r.template_id).map(r => r.template_id);
-      
-      if (templateIds.length === 0) {
-        console.log('No template IDs found, clearing checkpoints');
+      if (!activeRounds || activeRounds.length === 0) {
+        console.log('📍 No active rounds - clearing checkpoints');
         setRoundCheckpoints([]);
         return;
       }
 
-      console.log('Template IDs:', templateIds);
+      const roundIds = activeRounds.map(r => r.id).filter(Boolean);
+      const templateIds = activeRounds.filter(r => r.template_id).map(r => r.template_id).filter(Boolean);
+      
+      if (templateIds.length === 0) {
+        console.log('📍 No template-based rounds found - clearing checkpoints');
+        setRoundCheckpoints([]);
+        return;
+      }
+
+      console.log('📍 Round IDs:', roundIds);
+      console.log('📍 Template IDs:', templateIds);
 
       // Get checkpoints from templates
       const { data: templateCheckpoints, error: templateError } = await supabase
@@ -817,13 +832,21 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
         }
       });
 
-      console.log('Final processed round checkpoints:', formattedCheckpoints);
-      setRoundCheckpoints(formattedCheckpoints);
+      console.log('📍 ✓ Final checkpoint count for ACTIVE rounds:', formattedCheckpoints.length);
+      console.log('📍 === CHECKPOINT FETCH COMPLETE ===\n');
       
-      // Update checkpoint markers on map
-      setTimeout(() => updateRoundCheckpoints(), 100);
+      // Only update if checkpoints actually changed to prevent flickering
+      setRoundCheckpoints(prev => {
+        const hasChanged = JSON.stringify(prev) !== JSON.stringify(formattedCheckpoints);
+        if (hasChanged) {
+          console.log('📍 Checkpoints changed - updating state');
+          return formattedCheckpoints;
+        }
+        console.log('📍 Checkpoints unchanged - skipping update');
+        return prev;
+      });
     } catch (error) {
-      console.error("Error fetching round checkpoints:", error);
+      console.error("📍 Error fetching round checkpoints:", error);
       setRoundCheckpoints([]);
     }
   };
@@ -831,9 +854,15 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
   const updateRoundCheckpoints = () => {
     if (!map.current || !map.current.getContainer()) return;
 
-    console.log('📍 === UPDATING CHECKPOINT MARKERS ===');
+    console.log('📍 === UPDATING CHECKPOINT MARKERS (ACTIVE ROUNDS ONLY) ===');
     console.log('📍 Round checkpoints to display:', roundCheckpoints.length);
     console.log('📍 Current checkpoint markers before clear:', checkpointMarkers.current.length);
+
+    // Prevent unnecessary updates if markers already match
+    if (checkpointMarkers.current.length === roundCheckpoints.length && roundCheckpoints.length > 0) {
+      console.log('📍 ⚠️ Skipping update - markers already match checkpoints');
+      return;
+    }
 
     // CRITICAL: Remove ALL existing checkpoint markers first
     checkpointMarkers.current.forEach(marker => {

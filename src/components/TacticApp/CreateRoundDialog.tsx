@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Calendar, Car, Bike, MapPin, Building2 } from "lucide-react";
+import { Calendar, Car, Bike, MapPin, Building2, Route as RouteIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import RouteAnalysisDialog from "./RouteAnalysisDialog";
 
 interface CreateRoundDialogProps {
   isOpen: boolean;
@@ -35,6 +36,7 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
   const [loading, setLoading] = useState(false);
   const [roundType, setRoundType] = useState<'template' | 'avulsa'>('template');
   const [clientSearch, setClientSearch] = useState('');
+  const [showRoutePreview, setShowRoutePreview] = useState(false);
   const [formData, setFormData] = useState({
     template_id: "",
     client_id: ""
@@ -319,6 +321,20 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
                   )}
                 </SelectContent>
               </Select>
+              
+              {/* Botão de prévia de rota */}
+              {formData.template_id && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowRoutePreview(true)}
+                  className="w-full mt-2"
+                  size="sm"
+                >
+                  <RouteIcon className="w-4 h-4 mr-2" />
+                  Ver Prévia da Rota (Distância, Tempo, Custo)
+                </Button>
+              )}
             </div>
           )}
 
@@ -391,6 +407,16 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
           </div>
         </form>
       </DialogContent>
+      
+      {/* Route Preview Dialog */}
+      {formData.template_id && (
+        <RouteAnalysisDialog
+          open={showRoutePreview}
+          onOpenChange={setShowRoutePreview}
+          roundId={formData.template_id}
+          vehicleType="car"
+        />
+      )}
     </Dialog>
   );
 };
