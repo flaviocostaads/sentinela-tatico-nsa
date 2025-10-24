@@ -132,14 +132,6 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
     }
   }, [userLocations, clients, highlightedMarker]);
 
-  // Update map when locations change
-  useEffect(() => {
-    if (map.current) {
-      updateUserLocations();
-      updateClientMarkers();
-    }
-  }, [userLocations, clients, highlightedMarker]);
-
   // Update checkpoints when user locations change (they contain active rounds)
   useEffect(() => {
     if (map.current && userLocations.length > 0) {
