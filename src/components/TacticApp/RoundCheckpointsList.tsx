@@ -44,9 +44,9 @@ const RoundCheckpointsList = ({
 
   const fetchCheckpoints = async () => {
     try {
-      console.log("Fetching checkpoints for client:", clientId, "round:", roundId);
+      console.log("🔍 Fetching checkpoints for client:", clientId, "round:", roundId);
       
-      // Primeiro buscar checkpoints físicos do cliente
+      // Buscar checkpoints físicos do cliente
       const { data: checkpointsData, error } = await supabase
         .from("checkpoints")
         .select("*")
@@ -55,83 +55,30 @@ const RoundCheckpointsList = ({
         .order("order_index");
 
       if (error) {
-        console.error("Error fetching checkpoints:", error);
+        console.error("❌ Error fetching checkpoints:", error);
+        throw error;
       }
 
-      console.log("Physical checkpoints found:", checkpointsData);
+      console.log(`📍 Physical checkpoints found for client ${clientId}:`, checkpointsData?.length || 0, checkpointsData);
 
       if (checkpointsData && checkpointsData.length > 0) {
-        const formattedCheckpoints = checkpointsData.map(cp => ({
+        const formattedCheckpoints = checkpointsData.map((cp, index) => ({
           id: cp.id,
           name: cp.name,
-          description: cp.description,
+          description: cp.description || `Checkpoint ${index + 1}`,
           qr_code: cp.qr_code,
           manual_code: cp.manual_code,
           order_index: cp.order_index,
           checklist_items: cp.checklist_items
         }));
-        console.log("Using physical checkpoints:", formattedCheckpoints);
+        console.log(`✅ Using ${formattedCheckpoints.length} physical checkpoints:`, formattedCheckpoints);
         setCheckpoints(formattedCheckpoints);
       } else {
-        // Fallback: buscar informações do template da ronda para este cliente
-        const { data: roundData, error: roundError } = await supabase
-          .from("rounds")
-          .select(`
-            template_id,
-            round_templates (
-              round_template_checkpoints (
-                id,
-                client_id,
-                order_index,
-                estimated_duration_minutes,
-                clients (
-                  id,
-                  name,
-                  address,
-                  lat,
-                  lng
-                )
-              )
-            )
-          `)
-          .eq("id", roundId)
-          .maybeSingle();
-
-        if (roundError) {
-          console.error("Error fetching round data:", roundError);
-          throw roundError;
-        }
-
-        console.log("Round template data:", roundData);
-
-        if (roundData?.round_templates?.round_template_checkpoints) {
-          // Buscar todos os checkpoints deste cliente no template
-          const clientTemplateCheckpoints = roundData.round_templates.round_template_checkpoints
-            .filter((cp: any) => cp.client_id === clientId)
-            .sort((a: any, b: any) => a.order_index - b.order_index);
-          
-          console.log("Template checkpoints for client:", clientTemplateCheckpoints);
-          
-          // Criar checkpoints virtuais baseados no template
-          const templateCheckpoints = clientTemplateCheckpoints.map((cp: any, index: number) => ({
-            id: `virtual_${cp.id}_${clientId}`,
-            name: `Ponto ${index + 1} - ${cp.clients?.name || 'Cliente'}`,
-            description: `Ronda em ${cp.clients?.name || 'Cliente'} - ${cp.clients?.address || 'Endereço não informado'}`,
-            order_index: cp.order_index,
-            qr_code: null,
-            manual_code: null,
-            checklist_items: []
-          }));
-          
-          console.log("Created virtual checkpoints:", templateCheckpoints);
-          setCheckpoints(templateCheckpoints);
-        } else {
-          console.log("No template checkpoints found for client:", clientId);
-          setCheckpoints([]);
-        }
+        console.warn(`⚠️ No physical checkpoints found for client ${clientId}`);
+        setCheckpoints([]);
       }
     } catch (error) {
-      console.error("Error fetching checkpoints:", error);
+      console.error("❌ Error fetching checkpoints:", error);
       toast({
         title: "Erro",
         description: "Erro ao carregar pontos de ronda",

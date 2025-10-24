@@ -94,38 +94,45 @@ export const useClientCheckpointStats = (roundId: string) => {
         
         // For each client, count their PHYSICAL checkpoints (not template entries)
         for (const clientId of clientIds) {
-          console.log(`🔍 Fetching physical checkpoints for client ${clientId}`);
+          console.log(`🔍 [useClientCheckpointStats] Fetching physical checkpoints for client ${clientId}`);
           
           // Get ALL physical checkpoints for this client
           const { data: clientCheckpoints, error: checkpointsError } = await supabase
             .from("checkpoints")
-            .select("id")
+            .select("id, name")
             .eq("client_id", clientId)
             .eq("active", true);
 
           if (checkpointsError) {
-            console.error(`Error fetching checkpoints for client ${clientId}:`, checkpointsError);
+            console.error(`❌ [useClientCheckpointStats] Error fetching checkpoints for client ${clientId}:`, checkpointsError);
             continue;
           }
 
           const totalCheckpoints = clientCheckpoints?.length || 0;
-          console.log(`📍 Client ${clientId} has ${totalCheckpoints} physical checkpoints`);
+          console.log(`📍 [useClientCheckpointStats] Client ${clientId} has ${totalCheckpoints} physical checkpoints:`, 
+            clientCheckpoints?.map(c => c.name).join(', '));
 
           // Count completed visits for this client's checkpoints
           let completedCheckpoints = 0;
           if (visits && visits.length > 0 && clientCheckpoints) {
             const clientCheckpointIds = clientCheckpoints.map(c => c.id);
-            completedCheckpoints = visits.filter((visit: any) => 
+            const clientVisits = visits.filter((visit: any) => 
               clientCheckpointIds.includes(visit.checkpoint_id)
-            ).length;
+            );
+            completedCheckpoints = clientVisits.length;
             
-            console.log(`✅ Client ${clientId} has ${completedCheckpoints} completed visits out of ${totalCheckpoints}`);
+            console.log(`✅ [useClientCheckpointStats] Client ${clientId} has ${completedCheckpoints} completed visits out of ${totalCheckpoints}`);
+            console.log(`   Completed checkpoint IDs:`, clientVisits.map((v: any) => v.checkpoint_id));
+          } else {
+            console.log(`⏳ [useClientCheckpointStats] Client ${clientId} has 0 completed visits`);
           }
 
           clientStats[clientId] = {
             totalCheckpoints,
             completedCheckpoints: Math.min(completedCheckpoints, totalCheckpoints)
           };
+          
+          console.log(`📊 [useClientCheckpointStats] Stats for client ${clientId}:`, clientStats[clientId]);
         }
 
         console.log('Final client stats calculated:', clientStats);
