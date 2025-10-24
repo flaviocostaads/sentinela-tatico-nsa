@@ -72,6 +72,8 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [signatureData, setSignatureData] = useState<string | null>(null);
   const [checklistData, setChecklistData] = useState<{photo: string | null, observations: string, checklist: any[]} | null>(null);
+  const [requiresRoundSignature, setRequiresRoundSignature] = useState(false);
+  const [showFinalSignature, setShowFinalSignature] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -130,6 +132,7 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
       }
       
       setRound(roundData);
+      setRequiresRoundSignature(roundData.requires_signature || false);
 
       // Fetch checkpoints based on round template if available
       let checkpointsQuery = supabase
@@ -451,8 +454,22 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
   };
 
   const handleSignatureComplete = async (signature: string) => {
-    if (!checklistData) return;
+    if (!checklistData) {
+      // This is a final round signature
+      setSignatureData(signature);
+      setShowFinalSignature(false);
+      
+      toast({
+        title: "Assinatura registrada",
+        description: "Assinatura do cliente coletada com sucesso",
+      });
+      
+      // Now complete the round (bypass signature check)
+      await finalizeRound();
+      return;
+    }
     
+    // This is a checkpoint signature
     setSignatureData(signature);
     setShowSignaturePad(false);
     
@@ -467,7 +484,45 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
     setSignatureData(null);
   };
 
+  const finalizeRound = async () => {
+    try {
+      const { error } = await supabase
+        .from("rounds")
+        .update({ 
+          status: 'completed',
+          end_time: new Date().toISOString()
+        })
+        .eq("id", roundId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Ronda finalizada",
+        description: "A ronda foi concluída com sucesso",
+      });
+
+      onBack(); // Return to previous screen
+    } catch (error) {
+      console.error("Error completing round:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao finalizar ronda",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSignatureCancel = () => {
+    if (showFinalSignature) {
+      setShowFinalSignature(false);
+      toast({
+        title: "Assinatura cancelada",
+        description: "A assinatura é obrigatória para finalizar esta ronda",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setShowSignaturePad(false);
     setChecklistDialogOpen(true);
     toast({
@@ -727,31 +782,17 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
       return;
     }
 
-    try {
-      const { error } = await supabase
-        .from("rounds")
-        .update({ 
-          status: 'completed',
-          end_time: new Date().toISOString()
-        })
-        .eq("id", roundId);
-
-      if (error) throw error;
-
+    // Check if signature is required for round completion
+    if (requiresRoundSignature && !signatureData) {
+      setShowFinalSignature(true);
       toast({
-        title: "Ronda finalizada",
-        description: "A ronda foi concluída com sucesso",
+        title: "Assinatura obrigatória",
+        description: "Esta ronda requer assinatura do cliente para ser finalizada",
       });
-
-      onBack(); // Return to previous screen
-    } catch (error) {
-      console.error("Error completing round:", error);
-      toast({
-        title: "Erro",
-        description: "Erro ao finalizar ronda",
-        variant: "destructive",
-      });
+      return;
     }
+
+    await finalizeRound();
   };
 
   const formatTime = (timeString?: string) => {
@@ -1025,13 +1066,24 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
         onComplete={handleChecklistComplete}
       />
 
-      {/* Signature Pad Dialog */}
+      {/* Signature Pad Dialog - Checkpoint */}
       <Dialog open={showSignaturePad} onOpenChange={setShowSignaturePad}>
         <DialogContent className="sm:max-w-md">
           <SignaturePad
             onSignature={handleSignatureComplete}
             onCancel={handleSignatureCancel}
             clientName={selectedCheckpoint?.name || ""}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Signature Pad Dialog - Final Round */}
+      <Dialog open={showFinalSignature} onOpenChange={setShowFinalSignature}>
+        <DialogContent className="sm:max-w-md">
+          <SignaturePad
+            onSignature={handleSignatureComplete}
+            onCancel={handleSignatureCancel}
+            clientName={round?.clients?.name || "Cliente"}
           />
         </DialogContent>
       </Dialog>

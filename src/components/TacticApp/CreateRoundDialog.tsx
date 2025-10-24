@@ -93,7 +93,8 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
         .select(`
           id,
           name,
-          shift_type
+          shift_type,
+          requires_signature
         `)
         .eq("id", formData.template_id)
         .single();
@@ -108,7 +109,7 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
       // Fetch checkpoints separately to avoid RLS issues
       const { data: checkpoints, error: checkpointsError } = await supabase
         .from("round_template_checkpoints")
-        .select("id, client_id, order_index")
+        .select("id, client_id, order_index, required_signature")
         .eq("template_id", formData.template_id)
         .order("order_index");
 
@@ -135,7 +136,7 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
         status: 'pending' as const,
         current_checkpoint_index: 0,
         round_number: 1,
-        requires_signature: false,
+        requires_signature: templateData.requires_signature || false,
         created_by: user.id
       };
 
@@ -191,18 +192,18 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
                 <SelectValue placeholder="Selecione um template" />
               </SelectTrigger>
               <SelectContent>
-                {templates.map((template) => (
-                  <SelectItem key={template.id} value={template.id}>
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
-                      <div>
-                        <div className="font-medium">{template.name}</div>
-                        <div className="text-xs text-muted-foreground">{template.shift_type}</div>
-                      </div>
-                    </div>
-                  </SelectItem>
-                ))}
-          </SelectContent>
+                {templates.length === 0 ? (
+                  <div className="p-2 text-center text-sm text-muted-foreground">
+                    Nenhum template ativo disponível
+                  </div>
+                ) : (
+                  templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name} - {template.shift_type}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
         </Select>
       </div>
 
