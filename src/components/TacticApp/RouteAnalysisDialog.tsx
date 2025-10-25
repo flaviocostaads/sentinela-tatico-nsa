@@ -44,6 +44,7 @@ interface RouteAnalysisDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   roundId?: string;
+  templateId?: string;
   checkpoints?: Checkpoint[];
   vehicleType: 'car' | 'motorcycle' | 'on_foot';
   roundName?: string;
@@ -53,6 +54,7 @@ const RouteAnalysisDialog = ({
   open,
   onOpenChange,
   roundId,
+  templateId,
   checkpoints: providedCheckpoints,
   vehicleType,
   roundName
@@ -71,43 +73,46 @@ const RouteAnalysisDialog = ({
   const [operationalCost, setOperationalCost] = useState<any>(null);
 
   useEffect(() => {
-    if (open && roundId && !providedCheckpoints) {
+    if (open && (templateId || roundId) && !providedCheckpoints) {
       fetchCheckpoints();
     } else if (open && checkpoints.length >= 2) {
       analyzeRoute();
     }
-  }, [open, roundId]);
+  }, [open, roundId, templateId]);
 
   const fetchCheckpoints = async () => {
-    if (!roundId) return;
+    if (!templateId && !roundId) return;
     
     setLoading(true);
     try {
-      // Get round details to determine if it's template-based
-      const { data: round, error: roundError } = await supabase
-        .from('rounds')
-        .select('template_id, client_id')
-        .eq('id', roundId)
-        .single();
-
-      if (roundError) throw roundError;
-
       let checkpointsData: Checkpoint[] = [];
 
-      if (round.template_id) {
-        // Template-based round - get checkpoints from template
+      if (templateId) {
+        // Buscar checkpoints diretamente do template
+        console.log("Fetching checkpoints for template:", templateId);
+        
         const { data: templateCheckpoints, error: templateError } = await supabase
           .from('round_template_checkpoints')
-          .select('template_id, client_id, order_index')
-          .eq('template_id', round.template_id)
+          .select('client_id, order_index')
+          .eq('template_id', templateId)
           .order('order_index');
 
         if (templateError) throw templateError;
 
-        // Get client IDs from template
-        const clientIds = templateCheckpoints.map((tc: any) => tc.client_id);
+        if (!templateCheckpoints || templateCheckpoints.length === 0) {
+          toast({
+            title: "Erro",
+            description: "Template não possui checkpoints configurados",
+            variant: "destructive",
+          });
+          setCheckpoints([]);
+          return;
+        }
 
-        // Get client details
+        console.log("Template checkpoints:", templateCheckpoints);
+
+        // Buscar clientes com coordenadas
+        const clientIds = templateCheckpoints.map(tc => tc.client_id);
         const { data: clients, error: clientsError } = await supabase
           .from('clients')
           .select('id, name, lat, lng')
@@ -115,69 +120,186 @@ const RouteAnalysisDialog = ({
 
         if (clientsError) throw clientsError;
 
-        // Get checkpoints for these clients
-        const { data: clientCheckpoints, error: checkpointsError } = await supabase
+        console.log("Clients data:", clients);
+
+        // Buscar checkpoints físicos
+        const { data: physicalCheckpoints, error: checkpointsError } = await supabase
           .from('checkpoints')
           .select('id, name, client_id, lat, lng')
           .in('client_id', clientIds)
-          .eq('active', true)
-          .order('client_id, order_index');
+          .eq('active', true);
 
         if (checkpointsError) throw checkpointsError;
 
-        // Map template order to checkpoints - use physical checkpoints if available, otherwise use client location
-        checkpointsData = [];
-        
-        templateCheckpoints.forEach((tc: any) => {
-          const clientPhysicalCheckpoints = clientCheckpoints?.filter((cp: any) => cp.client_id === tc.client_id) || [];
-          const client = clients?.find((c: any) => c.id === tc.client_id);
+        console.log("Physical checkpoints:", physicalCheckpoints);
+
+        // Construir lista de checkpoints com fallback para coordenadas do cliente
+        templateCheckpoints.forEach(tc => {
+          const client = clients?.find(c => c.id === tc.client_id);
+          const clientPhysicalCheckpoints = physicalCheckpoints?.filter(cp => cp.client_id === tc.client_id) || [];
           
           if (clientPhysicalCheckpoints.length > 0) {
-            // Use physical checkpoints
-            clientPhysicalCheckpoints.forEach((cp: any) => {
-              checkpointsData.push({
-                id: cp.id,
-                name: cp.name,
-                latitude: cp.lat || client?.lat,
-                longitude: cp.lng || client?.lng
-              });
+            // Usar checkpoints físicos COM FALLBACK para coordenadas do cliente
+            clientPhysicalCheckpoints.forEach(cp => {
+              const lat = cp.lat || client?.lat;
+              const lng = cp.lng || client?.lng;
+              
+              if (lat && lng) {
+                checkpointsData.push({
+                  id: cp.id,
+                  name: cp.name,
+                  latitude: Number(lat),
+                  longitude: Number(lng)
+                });
+              }
             });
-          } else if (client) {
-            // Use client location as fallback
+          } else if (client?.lat && client?.lng) {
+            // Criar checkpoint virtual usando coordenadas do cliente
             checkpointsData.push({
-              id: tc.id,
-              name: client.name || "Cliente",
-              latitude: client.lat,
-              longitude: client.lng
+              id: `virtual_${tc.client_id}`,
+              name: client.name,
+              latitude: Number(client.lat),
+              longitude: Number(client.lng)
             });
           }
         });
-      } else {
-        // Custom round - get client location
-        const { data: client, error: clientError } = await supabase
-          .from('clients')
-          .select('id, name, lat, lng')
-          .eq('id', round.client_id)
+
+        console.log("Checkpoints before validation:", checkpointsData);
+
+        // VALIDAÇÃO CRÍTICA: Remover checkpoints sem coordenadas
+        checkpointsData = checkpointsData.filter(cp => 
+          cp.latitude && cp.longitude && 
+          !isNaN(cp.latitude) && !isNaN(cp.longitude)
+        );
+
+        console.log("Checkpoints after validation:", checkpointsData);
+
+        if (checkpointsData.length === 0) {
+          toast({
+            title: "Erro ao Carregar Pontos",
+            description: "Nenhum checkpoint com coordenadas válidas foi encontrado. Verifique se os clientes possuem lat/lng configurados.",
+            variant: "destructive"
+          });
+          setCheckpoints([]);
+          return;
+        }
+
+        if (checkpointsData.length === 1) {
+          toast({
+            title: "Pontos Insuficientes",
+            description: "Encontrado apenas 1 ponto. São necessários pelo menos 2 pontos para calcular uma rota.",
+            variant: "destructive"
+          });
+          setCheckpoints(checkpointsData);
+          return;
+        }
+
+      } else if (roundId) {
+        // Lógica existente para roundId
+        const { data: round, error: roundError } = await supabase
+          .from('rounds')
+          .select('template_id, client_id')
+          .eq('id', roundId)
           .single();
 
-        if (clientError) throw clientError;
+        if (roundError) throw roundError;
 
-        checkpointsData = [{
-          id: client.id,
-          name: client.name,
-          latitude: client.lat,
-          longitude: client.lng
-        }];
+        if (round.template_id) {
+          // Template-based round - get checkpoints from template
+          const { data: templateCheckpoints, error: templateError } = await supabase
+            .from('round_template_checkpoints')
+            .select('template_id, client_id, order_index')
+            .eq('template_id', round.template_id)
+            .order('order_index');
+
+          if (templateError) throw templateError;
+
+          // Get client IDs from template
+          const clientIds = templateCheckpoints.map((tc: any) => tc.client_id);
+
+          // Get client details
+          const { data: clients, error: clientsError } = await supabase
+            .from('clients')
+            .select('id, name, lat, lng')
+            .in('id', clientIds);
+
+          if (clientsError) throw clientsError;
+
+          // Get checkpoints for these clients
+          const { data: clientCheckpoints, error: checkpointsError } = await supabase
+            .from('checkpoints')
+            .select('id, name, client_id, lat, lng')
+            .in('client_id', clientIds)
+            .eq('active', true)
+            .order('client_id, order_index');
+
+          if (checkpointsError) throw checkpointsError;
+
+          // Map template order to checkpoints - use physical checkpoints if available, otherwise use client location
+          templateCheckpoints.forEach((tc: any) => {
+            const clientPhysicalCheckpoints = clientCheckpoints?.filter((cp: any) => cp.client_id === tc.client_id) || [];
+            const client = clients?.find((c: any) => c.id === tc.client_id);
+            
+            if (clientPhysicalCheckpoints.length > 0) {
+              // Use physical checkpoints with fallback
+              clientPhysicalCheckpoints.forEach((cp: any) => {
+                const lat = cp.lat || client?.lat;
+                const lng = cp.lng || client?.lng;
+                
+                if (lat && lng) {
+                  checkpointsData.push({
+                    id: cp.id,
+                    name: cp.name,
+                    latitude: Number(lat),
+                    longitude: Number(lng)
+                  });
+                }
+              });
+            } else if (client?.lat && client?.lng) {
+              // Use client location as fallback
+              checkpointsData.push({
+                id: tc.id,
+                name: client.name || "Cliente",
+                latitude: Number(client.lat),
+                longitude: Number(client.lng)
+              });
+            }
+          });
+        } else {
+          // Custom round - get client location
+          const { data: client, error: clientError } = await supabase
+            .from('clients')
+            .select('id, name, lat, lng')
+            .eq('id', round.client_id)
+            .single();
+
+          if (clientError) throw clientError;
+
+          if (client?.lat && client?.lng) {
+            checkpointsData = [{
+              id: client.id,
+              name: client.name,
+              latitude: Number(client.lat),
+              longitude: Number(client.lng)
+            }];
+          }
+        }
       }
 
       setCheckpoints(checkpointsData);
       
       if (checkpointsData.length >= 2) {
         await analyzeRoute();
+      } else if (checkpointsData.length === 1) {
+        toast({
+          title: "Aviso",
+          description: "Ronda possui apenas 1 ponto. São necessários pelo menos 2 pontos para calcular a rota.",
+          variant: "default",
+        });
       } else {
         toast({
           title: "Aviso",
-          description: "Ronda possui menos de 2 pontos. Análise não disponível.",
+          description: "Ronda não possui pontos válidos. Análise não disponível.",
           variant: "default",
         });
       }

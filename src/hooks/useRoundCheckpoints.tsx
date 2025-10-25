@@ -197,30 +197,32 @@ export const useRoundCheckpoints = () => {
             const checkpointLat = checkpoint.lat || clientCoords?.lat;
             const checkpointLng = checkpoint.lng || clientCoords?.lng;
             
-            if (checkpointLat && checkpointLng) {
-              const checkpointId = checkpoint.id;
-              const isVisited = visitedCheckpointsByRound.get(activeRound.id)?.has(checkpointId) || false;
-              
-              const formattedCheckpoint = {
-                id: checkpointId,
-                name: checkpoint.name,
-                lat: Number(checkpointLat),
-                lng: Number(checkpointLng),
-                visited: isVisited,
-                round_id: activeRound.id,
-                client_id: tc.client_id,
-                order_index: checkpoint.order_index,
-                qr_code: checkpoint.qr_code,
-                manual_code: checkpoint.manual_code
-              };
-              
-              addedCheckpoints.add(checkpointKey);
-              console.log("  ✅ Adding checkpoint to list:", formattedCheckpoint);
-              console.log(`    Using ${checkpoint.lat ? 'checkpoint' : 'client'} coordinates`);
-              formattedCheckpoints.push(formattedCheckpoint);
-            } else {
-              console.warn(`  ⚠️ Checkpoint ${checkpoint.name} has no coordinates and client ${tc.client_id} also has no coordinates!`);
+            // VALIDAR que tem coordenadas válidas
+            if (!checkpointLat || !checkpointLng || isNaN(Number(checkpointLat)) || isNaN(Number(checkpointLng))) {
+              console.warn(`  ⚠️ Checkpoint ${checkpoint.name} sem coordenadas válidas (cliente ${tc.client_id} também sem coordenadas)`);
+              return; // Pular este checkpoint
             }
+            
+            const checkpointId = checkpoint.id;
+            const isVisited = visitedCheckpointsByRound.get(activeRound.id)?.has(checkpointId) || false;
+            
+            const formattedCheckpoint = {
+              id: checkpointId,
+              name: checkpoint.name,
+              lat: Number(checkpointLat),
+              lng: Number(checkpointLng),
+              visited: isVisited,
+              round_id: activeRound.id,
+              client_id: tc.client_id,
+              order_index: checkpoint.order_index,
+              qr_code: checkpoint.qr_code,
+              manual_code: checkpoint.manual_code
+            };
+            
+            addedCheckpoints.add(checkpointKey);
+            console.log("  ✅ Adding checkpoint to list:", formattedCheckpoint);
+            console.log(`    Using ${checkpoint.lat ? 'checkpoint' : 'client'} coordinates`);
+            formattedCheckpoints.push(formattedCheckpoint);
           });
         } else {
           // No physical checkpoints found - create a virtual checkpoint using client info

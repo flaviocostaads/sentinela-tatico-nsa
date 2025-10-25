@@ -413,8 +413,9 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
         <RouteAnalysisDialog
           open={showRoutePreview}
           onOpenChange={setShowRoutePreview}
-          roundId={formData.template_id}
+          templateId={formData.template_id}
           vehicleType="car"
+          roundName={templates.find(t => t.id === formData.template_id)?.name}
         />
       )}
     </Dialog>
