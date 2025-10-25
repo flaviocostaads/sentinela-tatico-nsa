@@ -584,20 +584,30 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
       setChecklistDialogOpen(false);
       setSelectedCheckpoint(null);
 
-      // Check if this was the last checkpoint
-      const allCompleted = checkpoints.every((cp, index) => 
-        index < nextIndex || cp.visited
-      );
+      // ✅ FASE 3: Validação correta - TODOS os checkpoints devem estar visitados
+      const allCompleted = checkpoints.every(cp => cp.visited === true);
+      
+      console.log('🏁 Validação de checkpoint concluído:', {
+        total: checkpoints.length,
+        visited: checkpoints.filter(cp => cp.visited).length,
+        allCompleted,
+        checkpoints: checkpoints.map(cp => ({ name: cp.name, visited: cp.visited }))
+      });
       
       // NÃO FINALIZAR AUTOMATICAMENTE - mostrar tela de Retorno à Base
-      if (allCompleted && nextIndex >= checkpoints.length) {
+      if (allCompleted) {
+        console.log('🏁 TODOS OS CHECKPOINTS CONCLUÍDOS - Habilitando retorno à base');
+        
         toast({
           title: "Checkpoints Concluídos",
-          description: "Todos os pontos foram visitados. Agora retorne à base para finalizar a ronda.",
+          description: `Todos os ${checkpoints.length} pontos foram visitados. Agora retorne à base para finalizar a ronda.`,
         });
         
         // Mostrar diálogo de retorno à base
         setShowReturnToBase(true);
+      } else {
+        const pendingCount = checkpoints.filter(cp => !cp.visited).length;
+        console.log(`⏳ Ainda faltam ${pendingCount} checkpoints para concluir`);
       }
     } catch (error) {
       console.error("Error completing checkpoint:", error);

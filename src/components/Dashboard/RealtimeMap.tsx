@@ -43,6 +43,10 @@ interface RoundCheckpoint {
   client_name?: string;
   client_address?: string;
   order_index: number;
+  // ✅ FASE 1: Campos para checkpoints agrupados
+  checkpointGroup?: RoundCheckpoint[];
+  visitedCount?: number;
+  totalCount?: number;
 }
 
 interface EmergencyIncident {
@@ -660,9 +664,25 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       console.log('Active rounds to process:', activeRounds);
       
       if (!activeRounds || activeRounds.length === 0) {
-        console.log('📍 No active rounds - clearing checkpoints');
-        setRoundCheckpoints([]);
-        setPlannedRoutes([]); // Clear planned routes too
+        console.log('📍 No active rounds currently...');
+        
+        // ✅ FASE 2: Manter checkpoints visíveis por 5 minutos após finalização
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+        
+        const { data: recentRounds } = await supabase
+          .from('rounds')
+          .select('id, status, end_time')
+          .eq('status', 'completed')
+          .gte('end_time', fiveMinutesAgo);
+        
+        if (!recentRounds || recentRounds.length === 0) {
+          console.log('📍 No active or recent rounds - clearing checkpoints');
+          setRoundCheckpoints([]);
+          setPlannedRoutes([]);
+        } else {
+          console.log('📍 Recent rounds still visible:', recentRounds.length);
+        }
+        
         return;
       }
 
@@ -758,7 +778,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       console.log('📍 CRITICAL: All checkpoint visits fetched:', visits?.length || 0, visits);
 
       // Format checkpoints with visit status - SEMPRE PRESERVE VISITED STATUS
-      const formattedCheckpoints: RoundCheckpoint[] = [];
+      const allCheckpoints: RoundCheckpoint[] = [];
       
       console.log('Processing template checkpoints:', templateCheckpoints?.length || 0);
       
@@ -813,7 +833,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
             };
             
             console.log("✓ Adding checkpoint to map with visited status:", formattedCheckpoint.visited);
-            formattedCheckpoints.push(formattedCheckpoint);
+            allCheckpoints.push(formattedCheckpoint);
           } else {
             console.warn("⚠️ Checkpoint and client both missing coordinates:", checkpoint, clientData);
           }
@@ -822,6 +842,50 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
         // If no individual checkpoints found for this client, log warning
         if (checkpointsForClient.length === 0) {
           console.warn(`WARNING: No checkpoints found for client ${tc.client_id}. This client needs checkpoints created in the Checkpoints table.`);
+        }
+      });
+
+      // ✅ FASE 1: Agrupar checkpoints por localização para eliminar duplicatas
+      console.log('📍 FASE 1: Agrupando checkpoints por localização...');
+      const locationGroups = new Map<string, RoundCheckpoint[]>();
+      
+      allCheckpoints.forEach(cp => {
+        const locationKey = `${cp.lat.toFixed(6)},${cp.lng.toFixed(6)}`;
+        if (!locationGroups.has(locationKey)) {
+          locationGroups.set(locationKey, []);
+        }
+        locationGroups.get(locationKey)!.push(cp);
+      });
+      
+      console.log(`📍 Total checkpoints: ${allCheckpoints.length}, Localizações únicas: ${locationGroups.size}`);
+      
+      // Criar checkpoints consolidados (um por localização)
+      const formattedCheckpoints: RoundCheckpoint[] = [];
+      
+      locationGroups.forEach((checkpointsAtLocation, locationKey) => {
+        if (checkpointsAtLocation.length === 1) {
+          // Localização com apenas 1 checkpoint - adicionar normalmente
+          formattedCheckpoints.push(checkpointsAtLocation[0]);
+        } else {
+          // Localização com múltiplos checkpoints - consolidar
+          const allVisited = checkpointsAtLocation.every(cp => cp.visited);
+          const visitedCount = checkpointsAtLocation.filter(cp => cp.visited).length;
+          
+          console.log(`📍 Localização ${locationKey}: ${checkpointsAtLocation.length} checkpoints, ${visitedCount} visitados`);
+          
+          // Criar checkpoint consolidado
+          const consolidated: RoundCheckpoint = {
+            ...checkpointsAtLocation[0], // Base data
+            id: `consolidated_${locationKey}`, // ID único para o grupo
+            name: `${checkpointsAtLocation[0].client_name} (${checkpointsAtLocation.length} pontos)`,
+            visited: allVisited,
+            // Metadata adicional para popup
+            checkpointGroup: checkpointsAtLocation,
+            visitedCount,
+            totalCount: checkpointsAtLocation.length
+          };
+          
+          formattedCheckpoints.push(consolidated);
         }
       });
 
@@ -907,7 +971,16 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       el.style.fontWeight = 'bold';
       el.style.zIndex = checkpoint.visited ? '1001' : '1000'; // VERDE sempre na frente
       el.style.position = 'relative'; // Ensure proper stacking
-      el.textContent = checkpoint.visited ? '✓' : checkpoint.order_index.toString();
+      
+      // ✅ FASE 1: Badge correto para checkpoints agrupados
+      if (checkpoint.checkpointGroup && checkpoint.totalCount! > 1) {
+        // Checkpoint agrupado: mostrar "X/Y"
+        el.textContent = `${checkpoint.visitedCount}/${checkpoint.totalCount}`;
+        el.style.fontSize = '9px'; // Menor para caber "2/2"
+      } else {
+        // Checkpoint único: mostrar ✓ ou número de ordem
+        el.textContent = checkpoint.visited ? '✓' : checkpoint.order_index.toString();
+      }
 
       const marker = new mapboxgl.Marker(el) // Fixed position, no anchor to prevent zoom shifts
         .setLngLat([checkpoint.lng, checkpoint.lat])
@@ -922,13 +995,30 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
                 ${checkpoint.visited ? '✓ PONTO CONCLUÍDO' : '⏳ RONDA NÃO FINALIZADA'}
               </div>
               
+              ${checkpoint.checkpointGroup && checkpoint.totalCount! > 1 ? `
+                <div style="background: #f3f4f6; border: 2px solid #e5e7eb; padding: 10px; border-radius: 6px; margin: 0 0 12px 0;">
+                  <p style="margin: 0 0 8px 0; font-size: 12px; color: #111827; font-weight: 700;">
+                    📍 ${checkpoint.totalCount} Checkpoints nesta localização:
+                  </p>
+                  ${checkpoint.checkpointGroup.map((cp, i) => `
+                    <div style="margin: 4px 0; padding: 6px; background: white; border-radius: 4px; border-left: 3px solid ${cp.visited ? '#10b981' : '#ef4444'};">
+                      <span style="font-size: 11px; color: ${cp.visited ? '#059669' : '#dc2626'}; font-weight: 600;">
+                        ${cp.visited ? '✓' : '⏳'} ${cp.name}
+                      </span>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : ''}
+              
               <div style="margin: 10px 0; background: #f9fafb; padding: 10px; border-radius: 6px;">
                 <p style="margin: 0 0 6px 0; font-size: 12px; color: ${checkpoint.visited ? '#059669' : '#dc2626'}; font-weight: 700;">
                   Status: ${checkpoint.visited ? 'CONCLUÍDO ✓' : 'PENDENTE ⏳'}
                 </p>
-                <p style="margin: 0 0 4px 0; font-size: 11px; color: #111827;">
-                  <strong style="color: #111827;">Ordem:</strong> <span style="color: #374151; font-weight: 600;">#${checkpoint.order_index}</span>
-                </p>
+                ${!checkpoint.checkpointGroup ? `
+                  <p style="margin: 0 0 4px 0; font-size: 11px; color: #111827;">
+                    <strong style="color: #111827;">Ordem:</strong> <span style="color: #374151; font-weight: 600;">#${checkpoint.order_index}</span>
+                  </p>
+                ` : ''}
                 <p style="margin: 0 0 4px 0; font-size: 11px; color: #111827;">
                   <strong style="color: #111827;">Cliente:</strong> <span style="color: #374151; font-weight: 600;">${checkpoint.client_name || checkpoint.name}</span>
                 </p>
