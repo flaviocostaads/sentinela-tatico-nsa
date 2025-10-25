@@ -93,6 +93,24 @@ export const useRoundCheckpoints = () => {
       
       console.log("Fetching individual checkpoints for clients:", clientIds);
       
+      // Get client details with their coordinates
+      const { data: clientsData, error: clientsError } = await supabase
+        .from("clients")
+        .select("id, name, address, lat, lng")
+        .in("id", clientIds);
+
+      if (clientsError) throw clientsError;
+
+      // Create a map of client coordinates for fallback
+      const clientCoordinates = new Map(
+        clientsData?.map(client => [
+          client.id,
+          { lat: client.lat, lng: client.lng, name: client.name, address: client.address }
+        ]) || []
+      );
+
+      console.log("Client coordinates fetched:", clientCoordinates);
+      
       // Get individual checkpoints for each client
       const { data: clientCheckpoints, error: clientCheckpointsError } = await supabase
         .from("checkpoints")
@@ -149,15 +167,20 @@ export const useRoundCheckpoints = () => {
         checkpointsForClient.forEach((checkpoint, cpIndex) => {
           console.log(`  Processing individual checkpoint ${cpIndex + 1}:`, checkpoint);
           
-          if (checkpoint.lat && checkpoint.lng) {
+          // Use checkpoint coordinates if available, otherwise fallback to client coordinates
+          const clientCoords = clientCoordinates.get(tc.client_id);
+          const checkpointLat = checkpoint.lat || clientCoords?.lat;
+          const checkpointLng = checkpoint.lng || clientCoords?.lng;
+          
+          if (checkpointLat && checkpointLng) {
             const checkpointId = checkpoint.id;
             const isVisited = visits?.some(v => v.checkpoint_id === checkpointId && v.round_id === activeRound.id) || false;
             
             const formattedCheckpoint = {
               id: checkpointId,
               name: checkpoint.name,
-              lat: Number(checkpoint.lat),
-              lng: Number(checkpoint.lng),
+              lat: Number(checkpointLat),
+              lng: Number(checkpointLng),
               visited: isVisited,
               round_id: activeRound.id,
               client_id: tc.client_id,
@@ -167,9 +190,10 @@ export const useRoundCheckpoints = () => {
             };
             
             console.log("  Adding checkpoint to list:", formattedCheckpoint);
+            console.log(`    Using ${checkpoint.lat ? 'checkpoint' : 'client'} coordinates`);
             formattedCheckpoints.push(formattedCheckpoint);
           } else {
-            console.log("  Checkpoint has no valid coordinates:", checkpoint);
+            console.warn(`  ⚠️ Checkpoint ${checkpoint.name} has no coordinates and client ${tc.client_id} also has no coordinates!`);
           }
         });
         
