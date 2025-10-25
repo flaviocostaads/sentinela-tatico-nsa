@@ -1231,6 +1231,7 @@ export type Database = {
           checklist_data: Json
           created_at: string | null
           fuel_level: number | null
+          general_issues_photos: string[] | null
           id: string
           inspection_date: string | null
           inspection_type: string
@@ -1239,6 +1240,7 @@ export type Database = {
           notes: string | null
           odometer_reading: number
           overall_status: string
+          reported_problems: Json | null
           reviewed_at: string | null
           reviewed_by: string | null
           shift_start_time: string | null
@@ -1250,6 +1252,7 @@ export type Database = {
           checklist_data: Json
           created_at?: string | null
           fuel_level?: number | null
+          general_issues_photos?: string[] | null
           id?: string
           inspection_date?: string | null
           inspection_type: string
@@ -1258,6 +1261,7 @@ export type Database = {
           notes?: string | null
           odometer_reading: number
           overall_status: string
+          reported_problems?: Json | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           shift_start_time?: string | null
@@ -1269,6 +1273,7 @@ export type Database = {
           checklist_data?: Json
           created_at?: string | null
           fuel_level?: number | null
+          general_issues_photos?: string[] | null
           id?: string
           inspection_date?: string | null
           inspection_type?: string
@@ -1277,6 +1282,7 @@ export type Database = {
           notes?: string | null
           odometer_reading?: number
           overall_status?: string
+          reported_problems?: Json | null
           reviewed_at?: string | null
           reviewed_by?: string | null
           shift_start_time?: string | null

@@ -442,7 +442,7 @@ const RouteAnalysisDialog = ({
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Distância Total</p>
-                      <p className="text-2xl font-bold text-primary">
+                      <p className="text-2xl font-bold text-tactical-blue dark:text-blue-400">
                         {routeData.distanceKm.toFixed(2)} km
                       </p>
                       <p className="text-xs text-muted-foreground">
@@ -452,7 +452,7 @@ const RouteAnalysisDialog = ({
                     
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Tempo Estimado</p>
-                      <p className="text-2xl font-bold text-primary">
+                      <p className="text-2xl font-bold text-tactical-green dark:text-green-400">
                         {formatDuration(routeData.totalDuration)}
                       </p>
                       <p className="text-xs text-muted-foreground">
@@ -466,7 +466,7 @@ const RouteAnalysisDialog = ({
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     <div>
                       <p className="text-muted-foreground">Pontos de Parada</p>
-                      <p className="font-semibold">{checkpoints.length}</p>
+                      <p className="font-semibold text-foreground">{checkpoints.length}</p>
                       <p className="text-xs text-muted-foreground">+ BASE</p>
                     </div>
                     <div>
@@ -478,7 +478,7 @@ const RouteAnalysisDialog = ({
                     </div>
                     <div>
                       <p className="text-muted-foreground">Velocidade Média</p>
-                      <p className="font-semibold">
+                      <p className="font-semibold text-foreground">
                         {(routeData.distanceKm / routeData.durationHours).toFixed(1)} km/h
                       </p>
                     </div>

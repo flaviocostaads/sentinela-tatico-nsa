@@ -200,12 +200,6 @@ const TacticDashboard = ({ onNavigate }: DashboardProps) => {
   return (
     <>
       <div className="min-h-screen bg-background">
-        {/* View Mode Toggle */}
-        <ViewModeToggle 
-          isMobileView={isMobileView} 
-          onToggle={() => setIsMobileView(!isMobileView)} 
-        />
-
         {/* Enhanced Header */}
         <TacticHeader
           userName={userProfile?.name}

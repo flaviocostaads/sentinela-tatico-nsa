@@ -81,23 +81,23 @@ Military/Security themed dark professional interface
   }
 
   .dark {
-    /* Dark professional theme */
-    --background: 222 84% 4.9%;
-    --foreground: 210 40% 98%;
+    /* Dark professional theme - ADJUSTED FOR BETTER VISIBILITY */
+    --background: 222 40% 12%;
+    --foreground: 210 40% 100%;
 
-    --card: 224 24% 9%;
+    --card: 222 40% 10%;
     --card-foreground: 210 40% 98%;
 
-    --popover: 224 24% 9%;
+    --popover: 222 40% 10%;
     --popover-foreground: 210 40% 98%;
 
     /* Navy blue primary - security/trust */
-    --primary: 221 83% 15%;
+    --primary: 221 83% 55%;
     --primary-foreground: 210 40% 98%;
-    --primary-glow: 221 83% 25%;
+    --primary-glow: 221 83% 65%;
 
     /* Tactical secondary */
-    --secondary: 220 13% 18%;
+    --secondary: 220 20% 25%;
     --secondary-foreground: 210 40% 98%;
 
     --muted: 215 28% 17%;

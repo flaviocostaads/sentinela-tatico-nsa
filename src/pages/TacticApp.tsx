@@ -4,7 +4,7 @@ import TacticMap from "@/components/TacticApp/TacticMap";
 import TacticRounds from "@/components/TacticApp/TacticRounds";
 import TacticRoundDetail from "@/components/TacticApp/TacticRoundDetail";
 import TacticIncident from "@/components/TacticApp/TacticIncident";
-import TacticHistory from "@/components/TacticApp/TacticHistory";
+import TacticHistoryEnhanced from "@/components/TacticApp/TacticHistoryEnhanced";
 import RoundHistoryMap from "@/components/TacticApp/RoundHistoryMap";
 import { useGpsTracking } from "@/hooks/useGpsTracking";
 import { useToast } from "@/hooks/use-toast";
@@ -98,7 +98,7 @@ const TacticApp = () => {
         return <TacticIncident onBack={handleBack} />;
       
       case 'history':
-        return <TacticHistory onBack={handleBack} />;
+        return <TacticHistoryEnhanced onBack={handleBack} />;
       
       case 'historyMap':
         return <RoundHistoryMap onBack={handleBack} />;
