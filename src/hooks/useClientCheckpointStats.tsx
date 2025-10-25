@@ -108,29 +108,48 @@ export const useClientCheckpointStats = (roundId: string) => {
             continue;
           }
 
-          const totalCheckpoints = clientCheckpoints?.length || 0;
+          let totalCheckpoints = clientCheckpoints?.length || 0;
           console.log(`📍 [useClientCheckpointStats] Client ${clientId} has ${totalCheckpoints} physical checkpoints:`, 
             clientCheckpoints?.map(c => c.name).join(', '));
 
-          // Count completed visits for this client's checkpoints
-          let completedCheckpoints = 0;
-          if (visits && visits.length > 0 && clientCheckpoints) {
-            const clientCheckpointIds = clientCheckpoints.map(c => c.id);
-            const clientVisits = visits.filter((visit: any) => 
-              clientCheckpointIds.includes(visit.checkpoint_id)
-            );
-            completedCheckpoints = clientVisits.length;
+          // If no physical checkpoints, we'll have 1 virtual checkpoint
+          if (totalCheckpoints === 0) {
+            console.log(`✨ [useClientCheckpointStats] Client ${clientId} has no physical checkpoints, counting 1 virtual checkpoint`);
+            totalCheckpoints = 1;
             
-            console.log(`✅ [useClientCheckpointStats] Client ${clientId} has ${completedCheckpoints} completed visits out of ${totalCheckpoints}`);
-            console.log(`   Completed checkpoint IDs:`, clientVisits.map((v: any) => v.checkpoint_id));
+            // Check if the virtual checkpoint was visited
+            const templateCheckpoint = templateCheckpoints.find((tc: any) => tc.client_id === clientId);
+            const virtualCheckpointId = templateCheckpoint ? `virtual_${templateCheckpoint.id}` : null;
+            
+            const completedCheckpoints = (visits && virtualCheckpointId && visits.some((v: any) => v.checkpoint_id === virtualCheckpointId)) ? 1 : 0;
+            
+            console.log(`📊 [useClientCheckpointStats] Virtual checkpoint stats - Total: 1, Completed: ${completedCheckpoints}`);
+            
+            clientStats[clientId] = {
+              totalCheckpoints: 1,
+              completedCheckpoints
+            };
           } else {
-            console.log(`⏳ [useClientCheckpointStats] Client ${clientId} has 0 completed visits`);
-          }
+            // Count completed visits for this client's checkpoints
+            let completedCheckpoints = 0;
+            if (visits && visits.length > 0 && clientCheckpoints) {
+              const clientCheckpointIds = clientCheckpoints.map(c => c.id);
+              const clientVisits = visits.filter((visit: any) => 
+                clientCheckpointIds.includes(visit.checkpoint_id)
+              );
+              completedCheckpoints = clientVisits.length;
+              
+              console.log(`✅ [useClientCheckpointStats] Client ${clientId} has ${completedCheckpoints} completed visits out of ${totalCheckpoints}`);
+              console.log(`   Completed checkpoint IDs:`, clientVisits.map((v: any) => v.checkpoint_id));
+            } else {
+              console.log(`⏳ [useClientCheckpointStats] Client ${clientId} has 0 completed visits`);
+            }
 
-          clientStats[clientId] = {
-            totalCheckpoints,
-            completedCheckpoints: Math.min(completedCheckpoints, totalCheckpoints)
-          };
+            clientStats[clientId] = {
+              totalCheckpoints,
+              completedCheckpoints: Math.min(completedCheckpoints, totalCheckpoints)
+            };
+          }
           
           console.log(`📊 [useClientCheckpointStats] Stats for client ${clientId}:`, clientStats[clientId]);
         }

@@ -163,43 +163,67 @@ export const useRoundCheckpoints = () => {
         
         console.log(`Found ${checkpointsForClient.length} checkpoints for client ${tc.client_id}:`, checkpointsForClient);
         
-        // Add each individual checkpoint to the round
-        checkpointsForClient.forEach((checkpoint, cpIndex) => {
-          console.log(`  Processing individual checkpoint ${cpIndex + 1}:`, checkpoint);
-          
-          // Use checkpoint coordinates if available, otherwise fallback to client coordinates
-          const clientCoords = clientCoordinates.get(tc.client_id);
-          const checkpointLat = checkpoint.lat || clientCoords?.lat;
-          const checkpointLng = checkpoint.lng || clientCoords?.lng;
-          
-          if (checkpointLat && checkpointLng) {
-            const checkpointId = checkpoint.id;
-            const isVisited = visits?.some(v => v.checkpoint_id === checkpointId && v.round_id === activeRound.id) || false;
+        if (checkpointsForClient.length > 0) {
+          // Client has physical checkpoints - add them
+          checkpointsForClient.forEach((checkpoint, cpIndex) => {
+            console.log(`  Processing individual checkpoint ${cpIndex + 1}:`, checkpoint);
             
-            const formattedCheckpoint = {
-              id: checkpointId,
-              name: checkpoint.name,
-              lat: Number(checkpointLat),
-              lng: Number(checkpointLng),
+            // Use checkpoint coordinates if available, otherwise fallback to client coordinates
+            const clientCoords = clientCoordinates.get(tc.client_id);
+            const checkpointLat = checkpoint.lat || clientCoords?.lat;
+            const checkpointLng = checkpoint.lng || clientCoords?.lng;
+            
+            if (checkpointLat && checkpointLng) {
+              const checkpointId = checkpoint.id;
+              const isVisited = visits?.some(v => v.checkpoint_id === checkpointId && v.round_id === activeRound.id) || false;
+              
+              const formattedCheckpoint = {
+                id: checkpointId,
+                name: checkpoint.name,
+                lat: Number(checkpointLat),
+                lng: Number(checkpointLng),
+                visited: isVisited,
+                round_id: activeRound.id,
+                client_id: tc.client_id,
+                order_index: checkpoint.order_index,
+                qr_code: checkpoint.qr_code,
+                manual_code: checkpoint.manual_code
+              };
+              
+              console.log("  Adding checkpoint to list:", formattedCheckpoint);
+              console.log(`    Using ${checkpoint.lat ? 'checkpoint' : 'client'} coordinates`);
+              formattedCheckpoints.push(formattedCheckpoint);
+            } else {
+              console.warn(`  ⚠️ Checkpoint ${checkpoint.name} has no coordinates and client ${tc.client_id} also has no coordinates!`);
+            }
+          });
+        } else {
+          // No physical checkpoints found - create a virtual checkpoint using client info
+          const clientCoords = clientCoordinates.get(tc.client_id);
+          
+          if (clientCoords?.lat && clientCoords?.lng) {
+            // Create a virtual checkpoint ID based on the template checkpoint
+            const virtualCheckpointId = `virtual_${tc.id}`;
+            const isVisited = visits?.some(v => v.checkpoint_id === virtualCheckpointId && v.round_id === activeRound.id) || false;
+            
+            const virtualCheckpoint = {
+              id: virtualCheckpointId,
+              name: clientCoords.name || 'Checkpoint Principal',
+              lat: Number(clientCoords.lat),
+              lng: Number(clientCoords.lng),
               visited: isVisited,
               round_id: activeRound.id,
               client_id: tc.client_id,
-              order_index: checkpoint.order_index,
-              qr_code: checkpoint.qr_code,
-              manual_code: checkpoint.manual_code
+              order_index: tc.order_index,
+              qr_code: undefined,
+              manual_code: undefined
             };
             
-            console.log("  Adding checkpoint to list:", formattedCheckpoint);
-            console.log(`    Using ${checkpoint.lat ? 'checkpoint' : 'client'} coordinates`);
-            formattedCheckpoints.push(formattedCheckpoint);
+            console.log(`  ✨ Created virtual checkpoint for client without physical checkpoints:`, virtualCheckpoint);
+            formattedCheckpoints.push(virtualCheckpoint);
           } else {
-            console.warn(`  ⚠️ Checkpoint ${checkpoint.name} has no coordinates and client ${tc.client_id} also has no coordinates!`);
+            console.warn(`  ⚠️ Client ${tc.client_id} has no checkpoints and no coordinates! Cannot create virtual checkpoint.`);
           }
-        });
-        
-        // If no individual checkpoints found for this client, log warning
-        if (checkpointsForClient.length === 0) {
-          console.warn(`WARNING: No checkpoints found for client ${tc.client_id}. This client needs checkpoints created in the Checkpoints table.`);
         }
       });
       

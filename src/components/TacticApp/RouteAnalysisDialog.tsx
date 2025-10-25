@@ -107,6 +107,14 @@ const RouteAnalysisDialog = ({
         // Get client IDs from template
         const clientIds = templateCheckpoints.map((tc: any) => tc.client_id);
 
+        // Get client details
+        const { data: clients, error: clientsError } = await supabase
+          .from('clients')
+          .select('id, name, lat, lng')
+          .in('id', clientIds);
+
+        if (clientsError) throw clientsError;
+
         // Get checkpoints for these clients
         const { data: clientCheckpoints, error: checkpointsError } = await supabase
           .from('checkpoints')
@@ -117,13 +125,33 @@ const RouteAnalysisDialog = ({
 
         if (checkpointsError) throw checkpointsError;
 
-        // Map template order to checkpoints
-        checkpointsData = clientCheckpoints.map((cp: any) => ({
-          id: cp.id,
-          name: cp.name,
-          latitude: cp.lat,
-          longitude: cp.lng
-        }));
+        // Map template order to checkpoints - use physical checkpoints if available, otherwise use client location
+        checkpointsData = [];
+        
+        templateCheckpoints.forEach((tc: any) => {
+          const clientPhysicalCheckpoints = clientCheckpoints?.filter((cp: any) => cp.client_id === tc.client_id) || [];
+          const client = clients?.find((c: any) => c.id === tc.client_id);
+          
+          if (clientPhysicalCheckpoints.length > 0) {
+            // Use physical checkpoints
+            clientPhysicalCheckpoints.forEach((cp: any) => {
+              checkpointsData.push({
+                id: cp.id,
+                name: cp.name,
+                latitude: cp.lat || client?.lat,
+                longitude: cp.lng || client?.lng
+              });
+            });
+          } else if (client) {
+            // Use client location as fallback
+            checkpointsData.push({
+              id: tc.id,
+              name: client.name || "Cliente",
+              latitude: client.lat,
+              longitude: client.lng
+            });
+          }
+        });
       } else {
         // Custom round - get client location
         const { data: client, error: clientError } = await supabase
