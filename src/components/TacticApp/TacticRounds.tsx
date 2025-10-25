@@ -287,6 +287,15 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
   };
 
   const handleAnalyzeRoute = async (round: Round) => {
+    if (!round.template_id) {
+      toast({
+        title: "Erro",
+        description: "Esta ronda não possui um template associado",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     setRouteAnalysisRound(round);
     setShowRouteAnalysis(true);
   };
@@ -520,8 +529,9 @@ const TacticRounds = ({ onBack, onRoundSelect }: TacticRoundsProps) => {
         <RouteAnalysisDialog
           open={showRouteAnalysis}
           onOpenChange={setShowRouteAnalysis}
-          roundId={routeAnalysisRound.id}
+          templateId={routeAnalysisRound.template_id}
           vehicleType="car"
+          roundName={routeAnalysisRound.round_templates?.name}
         />
       )}
 
