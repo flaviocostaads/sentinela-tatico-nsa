@@ -59,6 +59,8 @@ const Clients = () => {
     lng: "",
     order_index: 1
   });
+  const [editingCheckpoint, setEditingCheckpoint] = useState<Checkpoint | null>(null);
+  const [editCheckpointDialogOpen, setEditCheckpointDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'grid' | 'compact'>('compact');
   const [showQrPrint, setShowQrPrint] = useState(false);
   const [qrPrintData, setQrPrintData] = useState<{
@@ -250,6 +252,18 @@ const Clients = () => {
     
     if (!selectedClient) return;
 
+    // Validar se o cliente tem coordenadas
+    if (!selectedClient.lat || !selectedClient.lng) {
+      if (!checkpointForm.lat || !checkpointForm.lng) {
+        toast({
+          title: "Aviso",
+          description: "Este cliente não possui coordenadas cadastradas. É necessário preencher as coordenadas manualmente ou atualizar o cadastro do cliente.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     try {
       // Generate 9-digit QR code
       const qrCodeNumber = Math.floor(100000000 + Math.random() * 900000000).toString();
@@ -258,11 +272,23 @@ const Clients = () => {
         client_id: selectedClient.id,
         name: checkpointForm.name,
         description: checkpointForm.description,
-        lat: checkpointForm.lat ? parseFloat(checkpointForm.lat) : null,
-        lng: checkpointForm.lng ? parseFloat(checkpointForm.lng) : null,
+        lat: checkpointForm.lat 
+          ? parseFloat(checkpointForm.lat) 
+          : selectedClient.lat,  // ✅ Usa coordenada do cliente como fallback
+        lng: checkpointForm.lng 
+          ? parseFloat(checkpointForm.lng) 
+          : selectedClient.lng,  // ✅ Usa coordenada do cliente como fallback
         order_index: checkpointForm.order_index,
         qr_code: qrCodeNumber
       };
+
+      // Log para feedback visual
+      console.log('📍 Criando checkpoint com coordenadas:', {
+        manual: !!checkpointForm.lat && !!checkpointForm.lng,
+        lat: checkpointData.lat,
+        lng: checkpointData.lng,
+        source: checkpointForm.lat ? 'Manual' : 'Cliente'
+      });
 
       const { error } = await supabase
         .from("checkpoints")
@@ -272,7 +298,7 @@ const Clients = () => {
 
       toast({
         title: "Sucesso",
-        description: "Ponto de verificação criado com sucesso!",
+        description: `Ponto criado com coordenadas ${checkpointForm.lat ? 'manuais' : 'do cliente'}!`,
       });
 
       setCheckpointDialogOpen(false);
@@ -283,6 +309,48 @@ const Clients = () => {
       toast({
         title: "Erro",
         description: "Erro ao criar ponto de verificação",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleEditCheckpoint = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!editingCheckpoint) return;
+
+    try {
+      const checkpointData = {
+        name: checkpointForm.name,
+        description: checkpointForm.description,
+        lat: checkpointForm.lat ? parseFloat(checkpointForm.lat) : null,
+        lng: checkpointForm.lng ? parseFloat(checkpointForm.lng) : null,
+        order_index: checkpointForm.order_index,
+      };
+
+      const { error } = await supabase
+        .from("checkpoints")
+        .update(checkpointData)
+        .eq("id", editingCheckpoint.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Sucesso",
+        description: "Ponto de verificação atualizado com sucesso!",
+      });
+
+      setEditCheckpointDialogOpen(false);
+      setEditingCheckpoint(null);
+      setCheckpointForm({ name: "", description: "", lat: "", lng: "", order_index: 1 });
+      if (selectedClient) {
+        fetchCheckpoints(selectedClient.id);
+      }
+    } catch (error) {
+      console.error("Error updating checkpoint:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao atualizar ponto de verificação",
         variant: "destructive",
       });
     }
@@ -624,15 +692,46 @@ const Clients = () => {
                           {checkpoint.description}
                         </p>
                       )}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => generateQRPrint(checkpoint)}
-                      >
-                        <Printer className="w-3 h-3 mr-1" />
-                        Imprimir QR Code
-                      </Button>
+                      {checkpoint.lat && checkpoint.lng && (
+                        <p className="text-xs text-muted-foreground mb-3">
+                          📍 {checkpoint.lat.toFixed(6)}, {checkpoint.lng.toFixed(6)}
+                        </p>
+                      )}
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => generateQRPrint(checkpoint)}
+                        >
+                          <Printer className="w-3 h-3 mr-1" />
+                          QR
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEditingCheckpoint(checkpoint);
+                            setCheckpointForm({
+                              name: checkpoint.name,
+                              description: checkpoint.description || "",
+                              lat: checkpoint.lat?.toString() || "",
+                              lng: checkpoint.lng?.toString() || "",
+                              order_index: checkpoint.order_index
+                            });
+                            setEditCheckpointDialogOpen(true);
+                          }}
+                        >
+                          <Edit className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => handleDeleteCheckpoint(checkpoint)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -646,6 +745,17 @@ const Clients = () => {
                 <DialogTitle>Criar Ponto de Verificação</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleCheckpointSubmit} className="space-y-4">
+                {selectedClient?.lat && selectedClient?.lng && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      💡 <strong>Dica:</strong> Se deixar as coordenadas em branco, o ponto será criado 
+                      automaticamente no endereço da empresa: <strong>{selectedClient?.name}</strong>
+                      <span className="block mt-1 text-xs opacity-75">
+                        ({selectedClient.lat.toFixed(6)}, {selectedClient.lng.toFixed(6)})
+                      </span>
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="checkpoint-name">Nome do Ponto</Label>
                   <Input
@@ -676,21 +786,37 @@ const Clients = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="checkpoint-lat">Latitude (opcional)</Label>
+                    <Label htmlFor="checkpoint-lat">
+                      Latitude (opcional)
+                      {!checkpointForm.lat && selectedClient?.lat && (
+                        <span className="text-xs text-muted-foreground ml-2">
+                          Padrão: {selectedClient.lat.toFixed(6)}
+                        </span>
+                      )}
+                    </Label>
                     <Input
                       id="checkpoint-lat"
                       type="number"
                       step="any"
+                      placeholder={selectedClient?.lat?.toString() || ""}
                       value={checkpointForm.lat}
                       onChange={(e) => setCheckpointForm({ ...checkpointForm, lat: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="checkpoint-lng">Longitude (opcional)</Label>
+                    <Label htmlFor="checkpoint-lng">
+                      Longitude (opcional)
+                      {!checkpointForm.lng && selectedClient?.lng && (
+                        <span className="text-xs text-muted-foreground ml-2">
+                          Padrão: {selectedClient.lng.toFixed(6)}
+                        </span>
+                      )}
+                    </Label>
                     <Input
                       id="checkpoint-lng"
                       type="number"
                       step="any"
+                      placeholder={selectedClient?.lng?.toString() || ""}
                       value={checkpointForm.lng}
                       onChange={(e) => setCheckpointForm({ ...checkpointForm, lng: e.target.value })}
                     />
@@ -698,6 +824,69 @@ const Clients = () => {
                 </div>
                 <Button type="submit" className="w-full bg-tactical-green hover:bg-tactical-green/90">
                   Criar Ponto de Verificação
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={editCheckpointDialogOpen} onOpenChange={setEditCheckpointDialogOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Editar Ponto de Verificação</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleEditCheckpoint} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-checkpoint-name">Nome do Ponto</Label>
+                  <Input
+                    id="edit-checkpoint-name"
+                    value={checkpointForm.name}
+                    onChange={(e) => setCheckpointForm({ ...checkpointForm, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-checkpoint-description">Descrição (opcional)</Label>
+                  <Input
+                    id="edit-checkpoint-description"
+                    value={checkpointForm.description}
+                    onChange={(e) => setCheckpointForm({ ...checkpointForm, description: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-order">Ordem de Visitação</Label>
+                  <Input
+                    id="edit-order"
+                    type="number"
+                    min="1"
+                    value={checkpointForm.order_index}
+                    onChange={(e) => setCheckpointForm({ ...checkpointForm, order_index: parseInt(e.target.value) })}
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-checkpoint-lat">Latitude</Label>
+                    <Input
+                      id="edit-checkpoint-lat"
+                      type="number"
+                      step="any"
+                      value={checkpointForm.lat}
+                      onChange={(e) => setCheckpointForm({ ...checkpointForm, lat: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-checkpoint-lng">Longitude</Label>
+                    <Input
+                      id="edit-checkpoint-lng"
+                      type="number"
+                      step="any"
+                      value={checkpointForm.lng}
+                      onChange={(e) => setCheckpointForm({ ...checkpointForm, lng: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <Button type="submit" className="w-full bg-tactical-blue hover:bg-tactical-blue/90">
+                  Atualizar Ponto de Verificação
                 </Button>
               </form>
             </DialogContent>
