@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { ClipboardCheck, Search, AlertTriangle, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { ClipboardCheck, Search, AlertTriangle, CheckCircle, XCircle, Clock, Settings } from 'lucide-react';
 import { useVehicleInspections } from '@/hooks/useVehicleInspections';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -62,12 +62,21 @@ export default function VehicleInspections() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header />
         <main className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
-          <div className="flex items-center gap-3">
-            <ClipboardCheck className="w-8 h-8 text-primary" />
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Inspeções Veiculares</h1>
-              <p className="text-muted-foreground">Gerencie e acompanhe todas as inspeções</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <ClipboardCheck className="w-8 h-8 text-primary" />
+              <div>
+                <h1 className="text-3xl font-bold tracking-tight">Inspeções Veiculares</h1>
+                <p className="text-muted-foreground">Gerencie e acompanhe todas as inspeções</p>
+              </div>
             </div>
+            <Button 
+              variant="outline" 
+              onClick={() => navigate('/vehicle-inspection-templates')}
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Gerenciar Templates
+            </Button>
           </div>
 
           {/* Estatísticas */}

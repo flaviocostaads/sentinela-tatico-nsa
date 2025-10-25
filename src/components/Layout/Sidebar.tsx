@@ -41,7 +41,6 @@ const getBaseMenuItems = (notifications: MenuNotifications) => [
   { icon: Navigation, label: "Veículos", path: "/vehicles", notifications: 0 },
   { icon: MapPin, label: "Mapa de Rondas", path: "/map", notifications: 0 },
   { icon: Radio, label: "Rondas Ativas", path: "/rounds", notifications: notifications.activeRounds },
-  { icon: Layers, label: "Templates de Ronda", path: "/round-templates", notifications: 0 },
   { icon: Clock, label: "Histórico", path: "/history", notifications: 0 },
   { icon: FileText, label: "Relatórios", path: "/reports", notifications: 0 },
   { icon: Calculator, label: "Calculadora de Custos", path: "/cost-calculator", notifications: 0 },
@@ -50,7 +49,6 @@ const getBaseMenuItems = (notifications: MenuNotifications) => [
   { icon: SettingsIcon, label: "Config. Combustível", path: "/fuel-configuration", notifications: 0 },
   { icon: Wrench, label: "Manutenção", path: "/maintenance-management", notifications: 0 },
   { icon: ClipboardCheck, label: "Inspeções Veiculares", path: "/vehicle-inspections", notifications: 0 },
-  { icon: ClipboardCheck, label: "Templates de Inspeção", path: "/vehicle-inspection-templates", notifications: 0 },
   { icon: BookOpen, label: "Documentação", path: "/documentation", notifications: 0 },
   { icon: Shield, label: "Logs de Auditoria", path: "/audit-logs", notifications: 0 }
 ];
