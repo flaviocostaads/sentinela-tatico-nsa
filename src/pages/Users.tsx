@@ -70,11 +70,20 @@ const Users = () => {
     fetchProfiles();
   }, []);
 
-  // Realtime: atualizar lista quando novos perfis forem criados
+  // Realtime: atualizar lista quando novos perfis forem criados ou atualizados
   useEffect(() => {
     const channel = supabase
       .channel('profiles-changes')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'profiles' }, () => {
+        console.log('Profile INSERT detected, refreshing list');
+        fetchProfiles();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, () => {
+        console.log('Profile UPDATE detected, refreshing list');
+        fetchProfiles();
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'profiles' }, () => {
+        console.log('Profile DELETE detected, refreshing list');
         fetchProfiles();
       })
       .subscribe();
@@ -148,12 +157,16 @@ const Users = () => {
 
       toast({
         title: "Sucesso",
-        description: "Convite enviado! O usuário receberá um email para definir sua senha.",
+        description: "Usuário criado com sucesso! O usuário receberá um email para confirmar.",
       });
 
       setDialogOpen(false);
       setFormData({ name: "", email: "", role: "tatico", temporaryPassword: "" });
-      fetchProfiles();
+      
+      // Aguardar um momento para garantir que o trigger completou e então atualizar a lista
+      setTimeout(() => {
+        fetchProfiles();
+      }, 1000);
     } catch (error) {
       console.error("Error creating user:", error);
       toast({
