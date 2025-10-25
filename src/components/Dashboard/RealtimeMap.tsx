@@ -12,6 +12,7 @@ import 'mapbox-gl/dist/mapbox-gl.css';
 import { useSecureMapbox } from "@/hooks/useSecureMapbox";
 import { useEmergencyAlert } from "@/hooks/useEmergencyAlert";
 import { useRealtimeMap } from "@/hooks/useRealtimeMap";
+import { useBaseLocation } from "@/hooks/useBaseLocation";
 import FullscreenEmergencyAlert from "./FullscreenEmergencyAlert";
 import IncidentDetailsDialog from "@/components/TacticApp/IncidentDetailsDialog";
 import "./EmergencyMapStyles.css";
@@ -92,6 +93,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
   } = useRealtimeMap();
   
   const { hasActiveAlert, isPlaying } = useEmergencyAlert(activeEmergencies);
+  const { base } = useBaseLocation();
 
   useEffect(() => {
     if (mapboxToken) {
@@ -252,6 +254,41 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       // Load initial data after map is loaded
       map.current.on('load', () => {
         fetchAllData();
+        
+        // Add BASE marker if configured
+        if (base) {
+          const baseEl = document.createElement('div');
+          baseEl.className = 'base-marker';
+          baseEl.style.cssText = `
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: 4px solid white;
+            box-shadow: 0 6px 16px rgba(102, 126, 234, 0.5);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            z-index: 2000;
+            cursor: pointer;
+          `;
+          baseEl.textContent = '🏠';
+
+          new mapboxgl.Marker(baseEl)
+            .setLngLat([base.lng, base.lat])
+            .setPopup(new mapboxgl.Popup({ offset: 30 }).setHTML(`
+              <div style="padding: 10px; min-width: 200px;">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                  <span style="font-size: 24px;">🏠</span>
+                  <strong style="color: #667eea; font-size: 16px;">BASE</strong>
+                </div>
+                <p style="margin: 4px 0; font-size: 13px;"><strong>${base.name}</strong></p>
+                <p style="margin: 2px 0; font-size: 12px; color: #666;">${base.address}</p>
+              </div>
+            `))
+            .addTo(map.current);
+        }
       });
     } catch (error) {
       console.error('Error initializing map:', error);
@@ -1064,7 +1101,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
 
   // Calculate and draw planned route for active rounds
   const calculateAndDrawPlannedRoutes = async (activeRounds: any[], checkpoints: RoundCheckpoint[]) => {
-    if (!map.current || !mapboxToken) return;
+    if (!map.current || !mapboxToken || !base) return;
 
     console.log('🛣️ === CALCULATING PLANNED ROUTES ===');
     
@@ -1079,22 +1116,14 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
 
         if (roundCheckpoints.length === 0) continue;
 
-        // Get user's current location for this round
-        const userLocation = userLocations.find(ul => ul.rounds?.id === round.id);
-        
-        if (!userLocation) {
-          console.log('No user location found for round:', round.id);
-          continue;
-        }
-
-        // Build waypoints: start (base) → all checkpoints → return to base
+        // Build waypoints: BASE → all checkpoints → BASE (return)
         const waypoints = [
-          `${userLocation.lng},${userLocation.lat}`, // 📍 BASE (start)
+          `${base.lng},${base.lat}`, // 🏠 BASE (start)
           ...roundCheckpoints.map(cp => `${cp.lng},${cp.lat}`), // 🏢 All checkpoints in order
-          `${userLocation.lng},${userLocation.lat}` // 🏠 BASE (return) - closes the route
+          `${base.lng},${base.lat}` // 🏠 BASE (return)
         ];
 
-        console.log('🛣️ Calculating route with waypoints:', waypoints.length);
+        console.log('🛣️ Calculating route from BASE with waypoints:', waypoints.length);
 
         // Call Mapbox Directions API
         const coordinates = waypoints.join(';');

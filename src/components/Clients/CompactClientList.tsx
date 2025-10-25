@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { MapPin, Edit, Trash2, Plus, ChevronDown, ChevronRight, List } from "lucide-react";
+import { MapPin, Edit, Trash2, Plus, ChevronDown, ChevronRight, List, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ interface Client {
   lng?: number;
   active: boolean;
   created_at: string;
+  is_base?: boolean;
 }
 
 interface Checkpoint {
@@ -98,12 +99,20 @@ const CompactClientList = ({
                         ) : (
                           <ChevronRight className="w-4 h-4 text-muted-foreground" />
                         )}
-                        <div>
-                          <h3 className="font-medium text-foreground">{client.name}</h3>
-                          <p className="text-sm text-muted-foreground">{client.address}</p>
+                        <div className="flex items-center gap-2">
+                          {client.is_base && <Home className="w-4 h-4 text-violet-500" />}
+                          <div>
+                            <h3 className="font-medium text-foreground">{client.name}</h3>
+                            <p className="text-sm text-muted-foreground">{client.address}</p>
+                          </div>
                         </div>
                       </div>
                       <div className="flex items-center space-x-2">
+                        {client.is_base && (
+                          <Badge className="bg-gradient-to-r from-violet-500 to-purple-500">
+                            BASE
+                          </Badge>
+                        )}
                         <Badge variant={client.active ? "default" : "secondary"}>
                           {client.active ? "Ativo" : "Inativo"}
                         </Badge>

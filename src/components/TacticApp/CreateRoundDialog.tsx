@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Calendar, Car, Bike, MapPin, Building2, Route as RouteIcon } from "lucide-react";
+import { Calendar, Car, Bike, MapPin, Building2, Route as RouteIcon, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -8,8 +8,10 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useBaseLocation } from "@/hooks/useBaseLocation";
 import RouteAnalysisDialog from "./RouteAnalysisDialog";
 import RoutePreviewMap from "./RoutePreviewMap";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface CreateRoundDialogProps {
   isOpen: boolean;
@@ -44,14 +46,24 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
     client_id: ""
   });
   const { toast } = useToast();
+  const { base, loading: baseLoading } = useBaseLocation();
 
   useEffect(() => {
     if (isOpen) {
       fetchTemplates();
       fetchClients();
       resetForm();
+      
+      // Avisar se não há base configurada
+      if (!baseLoading && !base) {
+        toast({
+          title: "⚠️ Base Não Configurada",
+          description: "Configure um cliente como BASE para calcular rotas precisas",
+          variant: "default"
+        });
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, base, baseLoading]);
 
   useEffect(() => {
     if (clientSearch.trim() === '') {

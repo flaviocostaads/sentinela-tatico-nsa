@@ -3,10 +3,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import { Loader2, X, Navigation, MapPin, Clock, Route as RouteIcon } from 'lucide-react';
+import { Loader2, X, Navigation, MapPin, Clock, Route as RouteIcon, Home } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useSecureMapbox } from '@/hooks/useSecureMapbox';
+import { useBaseLocation } from '@/hooks/useBaseLocation';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 
@@ -30,15 +31,14 @@ const RoutePreviewMap = ({ open, onOpenChange, templateId, templateName }: Route
   const [loading, setLoading] = useState(true);
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [routeData, setRouteData] = useState<any>(null);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const { token: mapboxToken } = useSecureMapbox();
+  const { base, loading: baseLoading } = useBaseLocation();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (open && templateId && mapboxToken) {
-      getUserLocation();
+    if (open && templateId && mapboxToken && !baseLoading) {
       fetchCheckpoints();
     }
     
@@ -48,26 +48,10 @@ const RoutePreviewMap = ({ open, onOpenChange, templateId, templateName }: Route
         map.current = null;
       }
     };
-  }, [open, templateId, mapboxToken]);
+  }, [open, templateId, mapboxToken, baseLoading]);
 
   const getUserLocation = () => {
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          });
-        },
-        (error) => {
-          console.error('Error getting user location:', error);
-          // Default to São Paulo if geolocation fails
-          setUserLocation({ lat: -23.5505, lng: -46.6333 });
-        }
-      );
-    } else {
-      setUserLocation({ lat: -23.5505, lng: -46.6333 });
-    }
+    // Função removida - agora usa base fixa do banco
   };
 
   const fetchCheckpoints = async () => {
@@ -165,10 +149,22 @@ const RoutePreviewMap = ({ open, onOpenChange, templateId, templateName }: Route
 
   const calculateAndDisplayRoute = async (cps: Checkpoint[]) => {
     try {
-      // Preparar coordenadas (começar da localização do usuário se disponível)
-      const waypoints = userLocation 
-        ? [{ lng: userLocation.lng, lat: userLocation.lat }, ...cps.map(cp => ({ lng: cp.lng, lat: cp.lat }))]
-        : cps.map(cp => ({ lng: cp.lng, lat: cp.lat }));
+      if (!base) {
+        toast({
+          title: "Base Não Configurada",
+          description: "Configure um cliente como BASE para calcular rotas precisas",
+          variant: "destructive"
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Rota: BASE → Checkpoints → BASE
+      const waypoints = [
+        { lng: base.lng, lat: base.lat }, // 🏠 Início (BASE)
+        ...cps.map(cp => ({ lng: cp.lng, lat: cp.lat })), // 🏢 Checkpoints
+        { lng: base.lng, lat: base.lat } // 🏠 Retorno (BASE)
+      ];
 
       const coordinates = waypoints.map(w => `${w.lng},${w.lat}`).join(';');
       
@@ -204,16 +200,15 @@ const RoutePreviewMap = ({ open, onOpenChange, templateId, templateName }: Route
   };
 
   const initializeMap = (routeGeometry: any, cps: Checkpoint[]) => {
-    if (!mapContainer.current || map.current) return;
+    if (!mapContainer.current || map.current || !base) return;
 
     mapboxgl.accessToken = mapboxToken;
 
     // Calcular centro do mapa
     const bounds = new mapboxgl.LngLatBounds();
     
-    if (userLocation) {
-      bounds.extend([userLocation.lng, userLocation.lat]);
-    }
+    // Adicionar BASE aos bounds
+    bounds.extend([base.lng, base.lat]);
     
     cps.forEach(cp => {
       bounds.extend([cp.lng, cp.lat]);
@@ -258,27 +253,35 @@ const RoutePreviewMap = ({ open, onOpenChange, templateId, templateName }: Route
         }
       });
 
-      // Adicionar marcador da base (se tiver localização do usuário)
-      if (userLocation) {
-        const baseEl = document.createElement('div');
-        baseEl.className = 'base-marker';
-        baseEl.style.width = '40px';
-        baseEl.style.height = '40px';
-        baseEl.style.borderRadius = '50%';
-        baseEl.style.backgroundColor = '#16a34a';
-        baseEl.style.border = '4px solid white';
-        baseEl.style.boxShadow = '0 0 20px rgba(22, 163, 74, 0.6)';
-        baseEl.style.display = 'flex';
-        baseEl.style.alignItems = 'center';
-        baseEl.style.justifyContent = 'center';
-        baseEl.style.fontSize = '20px';
-        baseEl.textContent = '🏠';
+      // Adicionar marcador da BASE
+      const baseEl = document.createElement('div');
+      baseEl.className = 'base-marker';
+      baseEl.style.cssText = `
+        width: 50px;
+        height: 50px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: 4px solid white;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        cursor: pointer;
+        z-index: 100;
+      `;
+      baseEl.textContent = '🏠';
 
-        new mapboxgl.Marker({ element: baseEl })
-          .setLngLat([userLocation.lng, userLocation.lat])
-          .setPopup(new mapboxgl.Popup().setHTML('<strong>🏠 BASE / SUA LOCALIZAÇÃO</strong>'))
-          .addTo(map.current);
-      }
+      new mapboxgl.Marker({ element: baseEl })
+        .setLngLat([base.lng, base.lat])
+        .setPopup(new mapboxgl.Popup({ offset: 25 }).setHTML(`
+          <div style="padding: 8px;">
+            <strong style="color: #667eea;">🏠 BASE</strong>
+            <p style="margin: 4px 0 0 0; font-size: 12px;">${base.name}</p>
+            <p style="margin: 2px 0 0 0; font-size: 11px; color: #666;">${base.address}</p>
+          </div>
+        `))
+        .addTo(map.current);
 
       // Adicionar marcadores dos checkpoints
       cps.forEach((cp, index) => {
@@ -335,8 +338,12 @@ const RoutePreviewMap = ({ open, onOpenChange, templateId, templateName }: Route
             {routeData && !loading && (
               <div className="flex gap-4 mt-3">
                 <Badge variant="outline" className="flex items-center gap-1">
+                  <Home className="w-3 h-3" />
+                  {base?.name || 'BASE'}
+                </Badge>
+                <Badge variant="outline" className="flex items-center gap-1">
                   <RouteIcon className="w-3 h-3" />
-                  {routeData.distance} km
+                  {routeData.distance} km (ida e volta)
                 </Badge>
                 <Badge variant="outline" className="flex items-center gap-1">
                   <Clock className="w-3 h-3" />

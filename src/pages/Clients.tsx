@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, MapPin, Edit, Trash2, QrCode, ExternalLink, Grid, List, Printer } from "lucide-react";
+import { Plus, MapPin, Edit, Trash2, QrCode, ExternalLink, Grid, List, Printer, Home } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,6 +13,7 @@ import Sidebar from "@/components/Layout/Sidebar";
 import { extractDataFromGoogleMapsUrl } from "@/utils/googleMapsParser";
 import CompactClientList from "@/components/Clients/CompactClientList";
 import QrPrintModel from "@/components/TacticApp/QrPrintModel";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface Client {
   id: string;
@@ -22,6 +23,7 @@ interface Client {
   lng?: number;
   active: boolean;
   created_at: string;
+  is_base?: boolean;
 }
 
 interface Checkpoint {
@@ -50,7 +52,8 @@ const Clients = () => {
     address: "",
     lat: "",
     lng: "",
-    googleMapsUrl: ""
+    googleMapsUrl: "",
+    is_base: false
   });
   const [checkpointForm, setCheckpointForm] = useState({
     name: "",
@@ -130,6 +133,7 @@ const Clients = () => {
         address: formData.address,
         lat: formData.lat ? parseFloat(formData.lat) : null,
         lng: formData.lng ? parseFloat(formData.lng) : null,
+        is_base: formData.is_base,
       };
 
       if (editingClient) {
@@ -142,7 +146,7 @@ const Clients = () => {
 
         toast({
           title: "Sucesso",
-          description: "Cliente atualizado com sucesso!",
+          description: `Cliente ${formData.is_base ? '(BASE) ' : ''}atualizado com sucesso!`,
         });
       } else {
         const { error } = await supabase
@@ -153,13 +157,13 @@ const Clients = () => {
 
         toast({
           title: "Sucesso",
-          description: "Cliente cadastrado com sucesso!",
+          description: `Cliente ${formData.is_base ? '(BASE) ' : ''}cadastrado com sucesso!`,
         });
       }
 
       setDialogOpen(false);
       setEditDialogOpen(false);
-      setFormData({ name: "", address: "", lat: "", lng: "", googleMapsUrl: "" });
+      setFormData({ name: "", address: "", lat: "", lng: "", googleMapsUrl: "", is_base: false });
       setEditingClient(null);
       fetchClients();
     } catch (error) {
@@ -179,7 +183,8 @@ const Clients = () => {
       address: client.address,
       lat: client.lat?.toString() || "",
       lng: client.lng?.toString() || "",
-      googleMapsUrl: ""
+      googleMapsUrl: "",
+      is_base: client.is_base || false
     });
     setEditDialogOpen(true);
   };
@@ -507,6 +512,27 @@ const Clients = () => {
                         />
                       </div>
                     </div>
+                    
+                    <div className="flex items-center space-x-2 p-4 bg-gradient-to-r from-violet-500/10 to-purple-500/10 border border-violet-500/20 rounded-lg">
+                      <Checkbox
+                        id="is_base"
+                        checked={formData.is_base}
+                        onCheckedChange={(checked) => setFormData({ ...formData, is_base: checked === true })}
+                      />
+                      <div className="grid gap-1.5 leading-none">
+                        <label
+                          htmlFor="is_base"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex items-center gap-2"
+                        >
+                          <Home className="w-4 h-4" />
+                          Este cliente é a Base de Operações
+                        </label>
+                        <p className="text-xs text-muted-foreground">
+                          A base é o ponto de saída e retorno dos táticos
+                        </p>
+                      </div>
+                    </div>
+                    
                     <Button type="submit" className="w-full bg-tactical-green hover:bg-tactical-green/90">
                       {editingClient ? 'Atualizar Cliente' : 'Cadastrar Cliente'}
                     </Button>
@@ -581,6 +607,27 @@ const Clients = () => {
                         />
                       </div>
                     </div>
+                    
+                    <div className="flex items-center space-x-2 p-4 bg-gradient-to-r from-violet-500/10 to-purple-500/10 border border-violet-500/20 rounded-lg">
+                      <Checkbox
+                        id="edit-is_base"
+                        checked={formData.is_base}
+                        onCheckedChange={(checked) => setFormData({ ...formData, is_base: checked === true })}
+                      />
+                      <div className="grid gap-1.5 leading-none">
+                        <label
+                          htmlFor="edit-is_base"
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex items-center gap-2"
+                        >
+                          <Home className="w-4 h-4" />
+                          Este cliente é a Base de Operações
+                        </label>
+                        <p className="text-xs text-muted-foreground">
+                          A base é o ponto de saída e retorno dos táticos
+                        </p>
+                      </div>
+                    </div>
+                    
                     <Button type="submit" className="w-full bg-tactical-blue hover:bg-tactical-blue/90">
                       Atualizar Cliente
                     </Button>
@@ -613,10 +660,20 @@ const Clients = () => {
                 <Card key={client.id} className="tactical-card">
                   <CardHeader>
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-lg">{client.name}</CardTitle>
-                      <Badge variant={client.active ? "default" : "secondary"}>
-                        {client.active ? "Ativo" : "Inativo"}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        {client.is_base && <Home className="w-5 h-5 text-violet-500" />}
+                        <CardTitle className="text-lg">{client.name}</CardTitle>
+                      </div>
+                      <div className="flex gap-2">
+                        {client.is_base && (
+                          <Badge className="bg-gradient-to-r from-violet-500 to-purple-500">
+                            BASE
+                          </Badge>
+                        )}
+                        <Badge variant={client.active ? "default" : "secondary"}>
+                          {client.active ? "Ativo" : "Inativo"}
+                        </Badge>
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
