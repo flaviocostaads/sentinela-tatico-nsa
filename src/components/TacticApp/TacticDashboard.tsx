@@ -11,7 +11,7 @@ import MaintenanceDialog from "./MaintenanceDialog";
 import TacticHeader from "./TacticHeader";
 import ShiftControlDialog from "./ShiftControlDialog";
 import PanicButton from "./PanicButton";
-import VehicleInspectionDialog from "./VehicleInspectionDialog";
+import VehicleInspectionDialogWizard from "./VehicleInspectionDialogWizard";
 
 
 interface DashboardProps {
@@ -354,11 +354,9 @@ const TacticDashboard = ({ onNavigate }: DashboardProps) => {
 
       {/* Vehicle Inspection Dialog */}
       {showInspectionDialog && (
-        <VehicleInspectionDialog
+        <VehicleInspectionDialogWizard
           open={showInspectionDialog}
           onClose={() => setShowInspectionDialog(false)}
-          vehicleId=""
-          vehicleType="car"
         />
       )}
 

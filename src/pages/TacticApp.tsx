@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import TacticDashboard from "@/components/TacticApp/TacticDashboard";
-import TacticMap from "@/components/TacticApp/TacticMap";
+import TacticMapEnhanced from "@/components/TacticApp/TacticMapEnhanced";
 import TacticRounds from "@/components/TacticApp/TacticRounds";
 import TacticRoundDetail from "@/components/TacticApp/TacticRoundDetail";
 import TacticIncident from "@/components/TacticApp/TacticIncident";
@@ -74,7 +74,7 @@ const TacticApp = () => {
         return <TacticDashboard onNavigate={handleNavigate} />;
       
       case 'map':
-        return <TacticMap onBack={handleBack} />;
+        return <TacticMapEnhanced onBack={handleBack} />;
       
       case 'rounds':
         return (
