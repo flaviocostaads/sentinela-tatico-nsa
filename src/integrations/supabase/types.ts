@@ -1146,6 +1146,13 @@ export type Database = {
         Returns: boolean
       }
       check_admin_role: { Args: { user_uuid: string }; Returns: boolean }
+      create_missing_profiles: {
+        Args: never
+        Returns: {
+          created_count: number
+          created_users: string[]
+        }[]
+      }
       delete_incident_with_audit: {
         Args: {
           p_admin_name: string

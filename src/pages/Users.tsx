@@ -155,6 +155,9 @@ const Users = () => {
         p_new_values: { name: formData.name, email: formData.email, role: formData.role }
       });
 
+      // Sincronizar perfis (criar perfil se o trigger falhou)
+      await syncMissingProfiles();
+
       toast({
         title: "Sucesso",
         description: "Usuário criado com sucesso! O usuário receberá um email para confirmar.",
@@ -162,11 +165,7 @@ const Users = () => {
 
       setDialogOpen(false);
       setFormData({ name: "", email: "", role: "tatico", temporaryPassword: "" });
-      
-      // Aguardar um momento para garantir que o trigger completou e então atualizar a lista
-      setTimeout(() => {
-        fetchProfiles();
-      }, 1000);
+      fetchProfiles();
     } catch (error) {
       console.error("Error creating user:", error);
       toast({
@@ -174,6 +173,21 @@ const Users = () => {
         description: "Erro ao enviar convite",
         variant: "destructive",
       });
+    }
+  };
+
+  const syncMissingProfiles = async () => {
+    try {
+      const { data, error } = await supabase.rpc('create_missing_profiles');
+      
+      if (error) throw error;
+      
+      if (data && data.length > 0 && data[0].created_count > 0) {
+        console.log(`Sincronizados ${data[0].created_count} perfis:`, data[0].created_users);
+        fetchProfiles();
+      }
+    } catch (error) {
+      console.error("Error syncing profiles:", error);
     }
   };
 
@@ -446,13 +460,23 @@ const Users = () => {
               </p>
             </div>
             
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button className="bg-tactical-green hover:bg-tactical-green/90">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Adicionar Usuário
-                </Button>
-              </DialogTrigger>
+            <div className="flex gap-2">
+              <Button 
+                variant="outline" 
+                onClick={syncMissingProfiles}
+                className="border-tactical-blue text-tactical-blue hover:bg-tactical-blue hover:text-white"
+              >
+                <UserCheck className="w-4 h-4 mr-2" />
+                Sincronizar Perfis
+              </Button>
+              
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button className="bg-tactical-green hover:bg-tactical-green/90">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Adicionar Usuário
+                  </Button>
+                </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Criar Novo Usuário</DialogTitle>
@@ -510,6 +534,7 @@ const Users = () => {
                 </form>
               </DialogContent>
             </Dialog>
+            </div>
 
             {/* Dialog para redefinir senha */}
             <Dialog open={resetPasswordDialogOpen} onOpenChange={setResetPasswordDialogOpen}>
