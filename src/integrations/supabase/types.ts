@@ -286,6 +286,47 @@ export type Database = {
         }
         Relationships: []
       }
+      fuel_price_config: {
+        Row: {
+          active: boolean | null
+          created_at: string | null
+          currency: string | null
+          fuel_type: string
+          id: string
+          last_updated_by: string | null
+          price_per_liter: number
+          updated_at: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string | null
+          currency?: string | null
+          fuel_type: string
+          id?: string
+          last_updated_by?: string | null
+          price_per_liter: number
+          updated_at?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string | null
+          currency?: string | null
+          fuel_type?: string
+          id?: string
+          last_updated_by?: string | null
+          price_per_liter?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fuel_price_config_last_updated_by_fkey"
+            columns: ["last_updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       incidents: {
         Row: {
           description: string | null
@@ -983,6 +1024,174 @@ export type Database = {
           },
         ]
       }
+      vehicle_inspection_photos: {
+        Row: {
+          checklist_item_id: string
+          created_at: string | null
+          id: string
+          inspection_id: string
+          issue_description: string | null
+          photo_url: string
+          severity: string | null
+        }
+        Insert: {
+          checklist_item_id: string
+          created_at?: string | null
+          id?: string
+          inspection_id: string
+          issue_description?: string | null
+          photo_url: string
+          severity?: string | null
+        }
+        Update: {
+          checklist_item_id?: string
+          created_at?: string | null
+          id?: string
+          inspection_id?: string
+          issue_description?: string | null
+          photo_url?: string
+          severity?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_inspection_photos_inspection_id_fkey"
+            columns: ["inspection_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_inspections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vehicle_inspection_templates: {
+        Row: {
+          active: boolean | null
+          created_at: string | null
+          created_by: string | null
+          id: string
+          items: Json
+          name: string
+          updated_at: string | null
+          vehicle_type: string
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          items: Json
+          name: string
+          updated_at?: string | null
+          vehicle_type: string
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          items?: Json
+          name?: string
+          updated_at?: string | null
+          vehicle_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_inspection_templates_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      vehicle_inspections: {
+        Row: {
+          checklist_data: Json
+          created_at: string | null
+          fuel_level: number | null
+          id: string
+          inspection_date: string | null
+          inspection_type: string
+          inspector_id: string
+          issues_reported: Json | null
+          notes: string | null
+          odometer_reading: number
+          overall_status: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          shift_start_time: string | null
+          signature_data: string | null
+          template_id: string | null
+          vehicle_id: string
+        }
+        Insert: {
+          checklist_data: Json
+          created_at?: string | null
+          fuel_level?: number | null
+          id?: string
+          inspection_date?: string | null
+          inspection_type: string
+          inspector_id: string
+          issues_reported?: Json | null
+          notes?: string | null
+          odometer_reading: number
+          overall_status: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          shift_start_time?: string | null
+          signature_data?: string | null
+          template_id?: string | null
+          vehicle_id: string
+        }
+        Update: {
+          checklist_data?: Json
+          created_at?: string | null
+          fuel_level?: number | null
+          id?: string
+          inspection_date?: string | null
+          inspection_type?: string
+          inspector_id?: string
+          issues_reported?: Json | null
+          notes?: string | null
+          odometer_reading?: number
+          overall_status?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          shift_start_time?: string | null
+          signature_data?: string | null
+          template_id?: string | null
+          vehicle_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vehicle_inspections_inspector_id_fkey"
+            columns: ["inspector_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "vehicle_inspections_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "vehicle_inspections_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_inspection_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicle_inspections_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vehicle_maintenance_logs: {
         Row: {
           cost: number | null
@@ -1092,6 +1301,9 @@ export type Database = {
           created_at: string
           current_odometer: number
           fuel_capacity: number | null
+          fuel_efficiency: number | null
+          fuel_efficiency_unit: string | null
+          fuel_type: string | null
           id: string
           initial_odometer: number
           license_plate: string
@@ -1106,6 +1318,9 @@ export type Database = {
           created_at?: string
           current_odometer?: number
           fuel_capacity?: number | null
+          fuel_efficiency?: number | null
+          fuel_efficiency_unit?: string | null
+          fuel_type?: string | null
           id?: string
           initial_odometer?: number
           license_plate: string
@@ -1120,6 +1335,9 @@ export type Database = {
           created_at?: string
           current_odometer?: number
           fuel_capacity?: number | null
+          fuel_efficiency?: number | null
+          fuel_efficiency_unit?: string | null
+          fuel_type?: string | null
           id?: string
           initial_odometer?: number
           license_plate?: string
