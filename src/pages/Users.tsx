@@ -840,35 +840,36 @@ const Users = () => {
                                     Redefinir Senha
                                   </Button>
                                 </div>
-                                {profile.role !== "admin" ? (
+                                <div className="flex space-x-2">
+                                  {profile.role === "admin" && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => {
+                                        setEditEmailData({
+                                          userId: profile.user_id,
+                                          currentEmail: profile.email,
+                                          newEmail: "",
+                                          alternativeEmail: ""
+                                        });
+                                        setEmailDialogOpen(true);
+                                      }}
+                                      className="hover:bg-tactical-blue/10 hover:text-tactical-blue flex-1"
+                                    >
+                                      <Edit className="w-4 h-4 mr-1" />
+                                      Alterar Email
+                                    </Button>
+                                  )}
                                   <Button
                                     size="sm"
                                     variant="destructive"
                                     onClick={() => deleteUser(profile.user_id, profile.name, profile.role)}
-                                    className="bg-tactical-red hover:bg-tactical-red/90 w-full"
+                                    className={`bg-tactical-red hover:bg-tactical-red/90 ${profile.role === "admin" ? "flex-1" : "w-full"}`}
                                   >
                                     <Trash2 className="w-4 h-4 mr-1" />
-                                    Excluir Permanentemente
+                                    Excluir
                                   </Button>
-                                ) : (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => {
-                                      setEditEmailData({
-                                        userId: profile.user_id,
-                                        currentEmail: profile.email,
-                                        newEmail: "",
-                                        alternativeEmail: ""
-                                      });
-                                      setEmailDialogOpen(true);
-                                    }}
-                                    className="hover:bg-tactical-blue/10 hover:text-tactical-blue w-full"
-                                  >
-                                    <Edit className="w-4 h-4 mr-1" />
-                                    Alterar Email
-                                  </Button>
-                                )}
+                                </div>
                               </div>
                             </div>
                           </CardContent>
@@ -923,17 +924,7 @@ const Users = () => {
                                 <Key className="w-4 h-4 mr-1" />
                                 Redefinir Senha
                               </Button>
-                              {profile.role !== "admin" ? (
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  onClick={() => deleteUser(profile.user_id, profile.name, profile.role)}
-                                  className="bg-tactical-red hover:bg-tactical-red/90"
-                                >
-                                  <Trash2 className="w-4 h-4 mr-1" />
-                                  Excluir
-                                </Button>
-                              ) : (
+                              {profile.role === "admin" && (
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -952,6 +943,15 @@ const Users = () => {
                                   Alterar Email
                                 </Button>
                               )}
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                onClick={() => deleteUser(profile.user_id, profile.name, profile.role)}
+                                className="bg-tactical-red hover:bg-tactical-red/90"
+                              >
+                                <Trash2 className="w-4 h-4 mr-1" />
+                                Excluir
+                              </Button>
                             </div>
                           </div>
                         </CardContent>
