@@ -44,6 +44,7 @@ const getBaseMenuItems = (notifications: MenuNotifications) => [
   { icon: Layers, label: "Templates de Ronda", path: "/round-templates", notifications: 0 },
   { icon: Clock, label: "Histórico", path: "/history", notifications: 0 },
   { icon: FileText, label: "Relatórios", path: "/reports", notifications: 0 },
+  { icon: Calculator, label: "Calculadora de Custos", path: "/cost-calculator", notifications: 0 },
   { icon: AlertTriangle, label: "Ocorrências", path: "/incidents", notifications: notifications.openIncidents },
   { icon: Fuel, label: "Abastecimento", path: "/fuel-management", notifications: 0 },
   { icon: SettingsIcon, label: "Config. Combustível", path: "/fuel-configuration", notifications: 0 },
