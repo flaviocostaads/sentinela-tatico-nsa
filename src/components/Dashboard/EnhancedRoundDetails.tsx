@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Clock, MapPin, Camera, AlertTriangle, User, Navigation, FileText, Download, Filter, Car, Bike, CheckCircle, XCircle, Calendar, Route } from "lucide-react";
+import { Clock, MapPin, Camera, AlertTriangle, User, Navigation, FileText, Download, Filter, Car, Bike, CheckCircle, XCircle, Calendar, Route, Home } from "lucide-react";
+import { useBaseLocation } from "@/hooks/useBaseLocation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -124,6 +125,7 @@ const EnhancedRoundDetails = ({ round, onClose }: EnhancedRoundDetailsProps) => 
     type: 'all', // all, visited, pending, incidents, photos
     search: ''
   });
+  const { base } = useBaseLocation();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -247,17 +249,48 @@ const EnhancedRoundDetails = ({ round, onClose }: EnhancedRoundDetailsProps) => 
   const calculateDistance = () => {
     if (routePoints.length < 2) return 0;
     
+    // Se há BASE configurada, incluir distância da BASE até o primeiro ponto e do último ponto até a BASE
     let distance = 0;
+    
+    if (base && base.lat && base.lng) {
+      // Distância da BASE até o primeiro ponto
+      const firstPoint = routePoints[0];
+      const R = 6371; // Earth's radius in km
+      
+      let dLat = (firstPoint.lat - Number(base.lat)) * Math.PI / 180;
+      let dLng = (firstPoint.lng - Number(base.lng)) * Math.PI / 180;
+      let a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(Number(base.lat) * Math.PI / 180) * Math.cos(firstPoint.lat * Math.PI / 180) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      let c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      distance += R * c;
+    }
+    
+    // Distância entre todos os pontos da rota
     for (let i = 1; i < routePoints.length; i++) {
       const prev = routePoints[i - 1];
       const curr = routePoints[i];
       
       // Haversine formula
-      const R = 6371; // Earth's radius in km
+      const R = 6371;
       const dLat = (curr.lat - prev.lat) * Math.PI / 180;
       const dLng = (curr.lng - prev.lng) * Math.PI / 180;
       const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
         Math.cos(prev.lat * Math.PI / 180) * Math.cos(curr.lat * Math.PI / 180) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      distance += R * c;
+    }
+    
+    if (base && base.lat && base.lng) {
+      // Distância do último ponto de volta para a BASE
+      const lastPoint = routePoints[routePoints.length - 1];
+      const R = 6371;
+      
+      const dLat = (Number(base.lat) - lastPoint.lat) * Math.PI / 180;
+      const dLng = (Number(base.lng) - lastPoint.lng) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lastPoint.lat * Math.PI / 180) * Math.cos(Number(base.lat) * Math.PI / 180) *
         Math.sin(dLng / 2) * Math.sin(dLng / 2);
       const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       distance += R * c;

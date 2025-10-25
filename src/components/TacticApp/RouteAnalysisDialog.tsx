@@ -26,12 +26,14 @@ import {
   TrendingUp,
   Navigation,
   Loader2,
-  AlertCircle 
+  AlertCircle,
+  Home
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useBaseLocation } from '@/hooks/useBaseLocation';
 
 interface Checkpoint {
   id: string;
@@ -65,6 +67,7 @@ const RouteAnalysisDialog = ({
     loading: apiLoading
   } = useMapboxDirections();
   
+  const { base, loading: baseLoading } = useBaseLocation();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>(providedCheckpoints || []);
@@ -316,12 +319,30 @@ const RouteAnalysisDialog = ({
   };
 
   const analyzeRoute = async () => {
+    if (!base) {
+      toast({
+        title: "BASE não configurada",
+        description: "Configure uma BASE no sistema para calcular rotas precisas",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const profile = getMapboxProfile(vehicleType);
     
-    const coordinates = checkpoints.map(cp => ({
+    // Incluir BASE no início e no fim da rota (BASE → Checkpoints → BASE)
+    const baseCoordinate = {
+      latitude: Number(base.lat),
+      longitude: Number(base.lng)
+    };
+    
+    const checkpointCoordinates = checkpoints.map(cp => ({
       latitude: cp.latitude,
       longitude: cp.longitude
     }));
+    
+    // Rota completa: BASE → Checkpoints → BASE
+    const coordinates = [baseCoordinate, ...checkpointCoordinates, baseCoordinate];
 
     const result = await calculateRoundDistance(coordinates, profile);
     
@@ -378,10 +399,18 @@ const RouteAnalysisDialog = ({
         </DialogHeader>
 
         <ScrollArea className="max-h-[calc(90vh-150px)]">
-          {(loading || apiLoading) ? (
+          {(loading || apiLoading || baseLoading) ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <span className="ml-2">Calculando rota...</span>
+              <span className="ml-2">
+                {baseLoading ? 'Carregando BASE...' : 'Calculando rota...'}
+              </span>
+            </div>
+          ) : !base ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <Home className="h-12 w-12 mb-4" />
+              <p className="font-semibold">BASE não configurada</p>
+              <p className="text-sm">Configure uma BASE no sistema para análise de rotas</p>
             </div>
           ) : !routeData ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -400,6 +429,17 @@ const RouteAnalysisDialog = ({
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {base && (
+                    <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border">
+                      <Home className="h-4 w-4 text-primary" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{base.name}</p>
+                        <p className="text-xs text-muted-foreground">{base.address}</p>
+                      </div>
+                      <Badge variant="outline">BASE</Badge>
+                    </div>
+                  )}
+                  
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <p className="text-sm text-muted-foreground">Distância Total</p>
@@ -407,7 +447,7 @@ const RouteAnalysisDialog = ({
                         {routeData.distanceKm.toFixed(2)} km
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatDistance(routeData.totalDistance)}
+                        {formatDistance(routeData.totalDistance)} (ida e volta)
                       </p>
                     </div>
                     
@@ -426,8 +466,9 @@ const RouteAnalysisDialog = ({
 
                   <div className="grid grid-cols-3 gap-2 text-sm">
                     <div>
-                      <p className="text-muted-foreground">Checkpoints</p>
+                      <p className="text-muted-foreground">Pontos de Parada</p>
                       <p className="font-semibold">{checkpoints.length}</p>
+                      <p className="text-xs text-muted-foreground">+ BASE</p>
                     </div>
                     <div>
                       <p className="text-muted-foreground">Veículo</p>
