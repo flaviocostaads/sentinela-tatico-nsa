@@ -3,7 +3,6 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useSecureMapbox } from "@/hooks/useSecureMapbox";
 import { useMapboxDirections } from "@/hooks/useMapboxDirections";
-import { useMapProvider } from "@/hooks/useMapProvider";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -50,7 +49,6 @@ export const MapSelector = ({
   const tempMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const { token, loading: tokenLoading } = useSecureMapbox();
   const { calculateDistanceBetweenPoints, loading: routeLoading } = useMapboxDirections();
-  const { googleMapsApiKey } = useMapProvider();
   
   const [searchAddress, setSearchAddress] = useState("");
   const [searching, setSearching] = useState(false);
@@ -172,13 +170,12 @@ export const MapSelector = ({
       // ========================================
       // CAMADA 2: Google Places API (EMPRESAS/POIs)
       // ========================================
-      if (googleMapsApiKey && results.length < 5) {
+      if (results.length < 5) {
         try {
           console.log('Calling Google Places API via edge function...');
           const { data: placesData, error: placesError } = await supabase.functions.invoke('search-places', {
             body: { 
               query: searchAddress,
-              apiKey: googleMapsApiKey,
               location: baseLocation ? { lat: baseLocation.lat, lng: baseLocation.lng } : null
             }
           });

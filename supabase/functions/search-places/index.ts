@@ -12,17 +12,25 @@ serve(async (req) => {
   }
 
   try {
-    const { query, apiKey, location } = await req.json();
+    const { query, location } = await req.json();
 
-    console.log('Search request received:', { query, hasApiKey: !!apiKey, location });
+    console.log('Search request received:', { query, location });
+
+    // 🔑 Buscar API Key do servidor (secret)
+    const GOOGLE_API_KEY = Deno.env.get('GOOGLE_PLACES_SERVER_KEY');
+    
+    if (!GOOGLE_API_KEY) {
+      console.error('❌ GOOGLE_PLACES_SERVER_KEY não configurada');
+      throw new Error('Google Places API key não configurada no servidor');
+    }
 
     // Validations
-    if (!query || !apiKey) {
-      throw new Error('Query e API Key são obrigatórios');
+    if (!query) {
+      throw new Error('Query é obrigatória');
     }
 
     // 1. Text Search - search for places/businesses
-    let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${apiKey}&language=pt-BR`;
+    let searchUrl = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(query)}&key=${GOOGLE_API_KEY}&language=pt-BR`;
     
     // Add proximity to base location if provided
     if (location?.lat && location?.lng) {
@@ -56,7 +64,7 @@ serve(async (req) => {
     const detailedResults = await Promise.all(
       (searchData.results || []).slice(0, 5).map(async (place: any) => {
         try {
-          const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=formatted_phone_number,opening_hours,website,rating,user_ratings_total&key=${apiKey}&language=pt-BR`;
+          const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${place.place_id}&fields=formatted_phone_number,opening_hours,website,rating,user_ratings_total&key=${GOOGLE_API_KEY}&language=pt-BR`;
           
           const detailsResponse = await fetch(detailsUrl);
           const detailsData = await detailsResponse.json();
