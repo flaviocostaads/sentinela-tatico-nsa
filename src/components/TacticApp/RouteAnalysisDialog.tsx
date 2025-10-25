@@ -349,11 +349,10 @@ const RouteAnalysisDialog = ({
     if (result) {
       setRouteData(result);
       
-      // Calcular custo de combustível (apenas para veículos motorizados)
+      // Calcular custo de combustível (agora com dados dinâmicos)
       if (vehicleType !== 'on_foot') {
-        const fuelPrice = 5.50; // R$ por litro
-        const consumption = vehicleType === 'motorcycle' ? 30 : 10; // km/l
-        const cost = calculateRoundCost(result.distanceKm, vehicleType, fuelPrice, consumption);
+        // Usar função assíncrona para buscar dados reais
+        const cost = await calculateRoundCost(result.distanceKm, undefined, vehicleType);
         setCostData(cost);
       } else {
         setCostData(null);

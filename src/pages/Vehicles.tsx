@@ -68,7 +68,9 @@ const Vehicles = () => {
     year: new Date().getFullYear(),
     type: "",
     initial_odometer: 0,
-    fuel_capacity: 0
+    fuel_capacity: 0,
+    fuel_type: "gasoline",
+    fuel_efficiency: 0
   });
   const [fuelData, setFuelData] = useState({
     fuel_amount: 0,
@@ -164,7 +166,9 @@ const Vehicles = () => {
         type: formData.type as 'car' | 'motorcycle',
         initial_odometer: formData.initial_odometer,
         current_odometer: formData.initial_odometer,
-        fuel_capacity: formData.fuel_capacity > 0 ? formData.fuel_capacity : null
+        fuel_capacity: formData.fuel_capacity > 0 ? formData.fuel_capacity : null,
+        fuel_type: formData.fuel_type,
+        fuel_efficiency: formData.fuel_efficiency > 0 ? formData.fuel_efficiency : null
       };
 
       const { error } = await supabase
@@ -186,7 +190,9 @@ const Vehicles = () => {
         year: new Date().getFullYear(),
         type: "",
         initial_odometer: 0,
-        fuel_capacity: 0
+        fuel_capacity: 0,
+        fuel_type: "gasoline",
+        fuel_efficiency: 0
       });
       fetchVehicles();
     } catch (error) {
@@ -490,6 +496,38 @@ const Vehicles = () => {
                         onChange={(e) => setFormData({ ...formData, fuel_capacity: parseFloat(e.target.value) })}
                         min="0"
                         step="0.1"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="fuel_type">Tipo de Combustível</Label>
+                      <Select 
+                        value={formData.fuel_type} 
+                        onValueChange={(value) => setFormData({ ...formData, fuel_type: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="gasoline">Gasolina</SelectItem>
+                          <SelectItem value="diesel">Diesel</SelectItem>
+                          <SelectItem value="ethanol">Etanol</SelectItem>
+                          <SelectItem value="electric">Elétrico</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="fuel_efficiency">Consumo Médio (km/L)</Label>
+                      <Input
+                        id="fuel_efficiency"
+                        type="number"
+                        value={formData.fuel_efficiency}
+                        onChange={(e) => setFormData({ ...formData, fuel_efficiency: parseFloat(e.target.value) })}
+                        min="0"
+                        step="0.1"
+                        placeholder="Ex: 12.5"
                       />
                     </div>
                   </div>

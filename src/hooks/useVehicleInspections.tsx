@@ -104,6 +104,74 @@ export const useVehicleInspections = () => {
 
       if (error) throw error;
 
+      // ===== INTEGRAÇÃO 6: Notificações de Inspeções Críticas =====
+      const issuesArray = Array.isArray(data.issues_reported) ? data.issues_reported : [];
+      if (data.overall_status === 'rejected' || 
+          issuesArray.some((issue: any) => issue.severity === 'critical')) {
+        
+        // Buscar admins e operadores para notificar
+        const { data: managers } = await supabase
+          .from('profiles')
+          .select('email, name')
+          .in('role', ['admin', 'operador']);
+
+        // Enviar notificação por email
+        if (managers && managers.length > 0) {
+          try {
+            await supabase.functions.invoke('send-email', {
+              body: {
+                to: managers.map(m => m.email),
+                subject: `⚠️ Inspeção Crítica - Veículo ${inspectionData.vehicle_id}`,
+                html: `
+                  <h2>Inspeção Veicular com Problemas Detectados</h2>
+                  <p><strong>Status:</strong> ${data.overall_status === 'rejected' ? 'REPROVADO' : 'COM PROBLEMAS CRÍTICOS'}</p>
+                  <p><strong>Veículo:</strong> ${inspectionData.vehicle_id}</p>
+                  <p><strong>Odômetro:</strong> ${data.odometer_reading} km</p>
+                  <p><strong>Data:</strong> ${new Date().toLocaleString('pt-BR')}</p>
+                  <br>
+                  <p><strong>Ação Necessária:</strong> Verifique os detalhes da inspeção no sistema imediatamente.</p>
+                `,
+                template_name: 'critical_inspection'
+              }
+            });
+          } catch (emailError) {
+            console.error('Error sending inspection notification email:', emailError);
+          }
+        }
+      }
+
+      // ===== INTEGRAÇÃO 7: Link com Manutenção =====
+      const issuesForMaintenance = Array.isArray(inspectionData.issues_reported) ? inspectionData.issues_reported : [];
+      const criticalIssues = issuesForMaintenance.filter(
+        (issue: any) => issue.severity === 'critical'
+      );
+
+      if (criticalIssues && criticalIssues.length > 0) {
+        const maintenanceDescription = criticalIssues
+          .map((issue: any) => `- ${issue.item_name}: ${issue.description}`)
+          .join('\n');
+
+        // Criar solicitação de manutenção automática
+        await supabase
+          .from('vehicle_maintenance_logs')
+          .insert({
+            vehicle_id: inspectionData.vehicle_id,
+            service_type: 'corretiva',
+            maintenance_type: 'emergency',
+            description: `🔴 URGENTE - Problemas encontrados na inspeção veicular:\n\n${maintenanceDescription}\n\nInspeção ID: ${data.id}`,
+            odometer_reading: data.odometer_reading,
+            created_by: user.id,
+            start_time: new Date().toISOString(),
+            status: 'pending'
+          });
+
+        toast({
+          title: "⚠️ Manutenção Solicitada",
+          description: "Problemas críticos geraram solicitação automática de manutenção",
+          variant: "default"
+        });
+      }
+
       toast({
         title: "Sucesso",
         description: "Inspeção registrada com sucesso"

@@ -12,6 +12,7 @@ import { useBaseLocation } from "@/hooks/useBaseLocation";
 import RouteAnalysisDialog from "./RouteAnalysisDialog";
 import RoutePreviewMap from "./RoutePreviewMap";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useVehicleInspections } from "@/hooks/useVehicleInspections";
 
 interface CreateRoundDialogProps {
   isOpen: boolean;
@@ -47,6 +48,7 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
   });
   const { toast } = useToast();
   const { base, loading: baseLoading } = useBaseLocation();
+  const { checkVehicleHasValidInspection } = useVehicleInspections();
 
   useEffect(() => {
     if (isOpen) {
@@ -158,6 +160,10 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
+
+      // NOVA VALIDAÇÃO: Verificar inspeção do veículo antes de criar ronda
+      // Nota: Como rondas agora não têm veículo pré-atribuído, esta validação
+      // será feita quando o tático selecionar o veículo ao INICIAR a ronda
 
       if (roundType === 'template') {
         // Criar ronda com template

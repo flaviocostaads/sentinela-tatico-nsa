@@ -30,6 +30,9 @@ import MaintenanceManagement from "./pages/MaintenanceManagement";
 import RoundTemplates from "./pages/RoundTemplates";
 import Settings from "./pages/Settings";
 import QRScannerPage from "./pages/QRScanner";
+import FuelConfiguration from "./pages/FuelConfiguration";
+import VehicleInspections from "./pages/VehicleInspections";
+import VehicleInspectionDetail from "./pages/VehicleInspectionDetail";
 
 const queryClient = new QueryClient();
 
@@ -184,6 +187,21 @@ const App = () => (
               <Route path="/documentation" element={
                 <ProtectedRoute>
                   <Documentation />
+                </ProtectedRoute>
+              } />
+              <Route path="/fuel-configuration" element={
+                <ProtectedRoute>
+                  <FuelConfiguration />
+                </ProtectedRoute>
+              } />
+              <Route path="/vehicle-inspections" element={
+                <ProtectedRoute>
+                  <VehicleInspections />
+                </ProtectedRoute>
+              } />
+              <Route path="/vehicle-inspections/:id" element={
+                <ProtectedRoute>
+                  <VehicleInspectionDetail />
                 </ProtectedRoute>
               } />
               <Route path="*" element={<NotFound />} />

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { MapPin, Navigation, Clock, Shield, Fuel, Wrench, AlertTriangle, User } from "lucide-react";
+import { MapPin, Navigation, Clock, Shield, Fuel, Wrench, AlertTriangle, User, ClipboardCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,7 @@ import MaintenanceDialog from "./MaintenanceDialog";
 import TacticHeader from "./TacticHeader";
 import ShiftControlDialog from "./ShiftControlDialog";
 import PanicButton from "./PanicButton";
+import VehicleInspectionDialog from "./VehicleInspectionDialog";
 
 
 interface DashboardProps {
@@ -47,6 +48,7 @@ const TacticDashboard = ({ onNavigate }: DashboardProps) => {
   const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
   const [showShiftDialog, setShowShiftDialog] = useState(false);
   const [shiftType, setShiftType] = useState<'entrada' | 'saida'>('entrada');
+  const [showInspectionDialog, setShowInspectionDialog] = useState(false);
 
   useEffect(() => {
     fetchUserProfile();
@@ -265,6 +267,20 @@ const TacticDashboard = ({ onNavigate }: DashboardProps) => {
               </div>
             )}
 
+            {/* Checklist Veicular Button */}
+            <Button
+              onClick={() => setShowInspectionDialog(true)}
+              className="w-full h-16 bg-card hover:bg-accent border rounded-xl flex items-center justify-start px-6 shadow-sm transition-colors group"
+            >
+              <div className="w-12 h-12 bg-tactical-blue/10 rounded-xl flex items-center justify-center mr-4 group-hover:bg-tactical-blue/20 transition-colors">
+                <ClipboardCheck className="w-6 h-6 text-tactical-blue" />
+              </div>
+              <div className="text-left">
+                <span className="text-lg font-semibold block text-foreground">Checklist Veicular</span>
+                <span className="text-sm text-muted-foreground">Inspeção pré-plantão</span>
+              </div>
+            </Button>
+
             {/* Create Round Button */}
             <Button
               onClick={() => setShowCreateRound(true)}
@@ -341,6 +357,16 @@ const TacticDashboard = ({ onNavigate }: DashboardProps) => {
         open={showMaintenanceDialog}
         onOpenChange={setShowMaintenanceDialog}
       />
+
+      {/* Vehicle Inspection Dialog */}
+      {showInspectionDialog && (
+        <VehicleInspectionDialog
+          open={showInspectionDialog}
+          onClose={() => setShowInspectionDialog(false)}
+          vehicleId=""
+          vehicleType="car"
+        />
+      )}
 
     </>
   );

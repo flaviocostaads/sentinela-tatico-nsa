@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useSecureMapbox } from './useSecureMapbox';
 import { toast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Coordinate {
   latitude: number;
@@ -204,33 +205,65 @@ export const useMapboxDirections = () => {
 
   /**
    * Calcula o custo estimado da ronda baseado na distância
+   * ATUALIZADO: Agora busca preços e consumo dinâmicos do banco de dados
    */
-  const calculateRoundCost = (
+  const calculateRoundCost = async (
     distanceKm: number,
-    vehicleType: 'car' | 'motorcycle',
-    fuelPricePerLiter: number = 5.50, // Preço médio da gasolina no Brasil
-    consumption?: number // km/litro
-  ): {
+    vehicleId?: string,
+    vehicleType?: 'car' | 'motorcycle'
+  ): Promise<{
     fuelConsumption: number; // litros
     estimatedCost: number; // R$
     costPerKm: number;
-  } => {
-    // Consumo médio por tipo de veículo (km/litro)
-    const defaultConsumption = {
-      car: 10, // 10 km/l
-      motorcycle: 30, // 30 km/l
-    };
+    fuelPrice: number;
+    vehicleEfficiency: number;
+  } | null> => {
+    try {
+      let fuelPrice = 5.50; // Fallback
+      let vehicleEfficiency = vehicleType === 'motorcycle' ? 30 : 10; // Fallback
+      let fuelType = 'gasoline';
 
-    const vehicleConsumption = consumption || defaultConsumption[vehicleType];
-    const fuelConsumption = distanceKm / vehicleConsumption;
-    const estimatedCost = fuelConsumption * fuelPricePerLiter;
-    const costPerKm = estimatedCost / distanceKm;
+      // Se vehicleId fornecido, buscar dados reais do veículo
+      if (vehicleId) {
+        const { data: vehicle, error } = await supabase
+          .from('vehicles')
+          .select('fuel_efficiency, fuel_type')
+          .eq('id', vehicleId)
+          .maybeSingle();
 
-    return {
-      fuelConsumption: parseFloat(fuelConsumption.toFixed(2)),
-      estimatedCost: parseFloat(estimatedCost.toFixed(2)),
-      costPerKm: parseFloat(costPerKm.toFixed(2))
-    };
+        if (!error && vehicle) {
+          vehicleEfficiency = vehicle.fuel_efficiency || vehicleEfficiency;
+          fuelType = vehicle.fuel_type || fuelType;
+        }
+      }
+
+      // Buscar preço atual do combustível
+      const { data: fuelConfig } = await supabase
+        .from('fuel_price_config')
+        .select('price_per_liter')
+        .eq('fuel_type', fuelType)
+        .eq('active', true)
+        .maybeSingle();
+
+      if (fuelConfig) {
+        fuelPrice = fuelConfig.price_per_liter;
+      }
+
+      const fuelConsumption = distanceKm / vehicleEfficiency;
+      const estimatedCost = fuelConsumption * fuelPrice;
+      const costPerKm = estimatedCost / distanceKm;
+
+      return {
+        fuelConsumption: parseFloat(fuelConsumption.toFixed(2)),
+        estimatedCost: parseFloat(estimatedCost.toFixed(2)),
+        costPerKm: parseFloat(costPerKm.toFixed(2)),
+        fuelPrice,
+        vehicleEfficiency
+      };
+    } catch (error) {
+      console.error('Error calculating round cost:', error);
+      return null;
+    }
   };
 
   /**
