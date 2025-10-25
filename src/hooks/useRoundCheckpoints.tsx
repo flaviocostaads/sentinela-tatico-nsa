@@ -33,6 +33,9 @@ export const useRoundCheckpoints = () => {
     try {
       setLoading(true);
       
+      // Store previous checkpoints to preserve visited state during updates
+      const previousCheckpoints = [...checkpoints];
+      
       const roundIds = activeRounds.map(r => r.id);
       const templateIds = activeRounds.filter(r => r.template_id).map(r => r.template_id);
       
@@ -229,7 +232,18 @@ export const useRoundCheckpoints = () => {
       
       console.log("Final formatted checkpoints:", formattedCheckpoints);
 
-      setCheckpoints(formattedCheckpoints);
+      // Merge with previous state to preserve visited status during updates
+      const mergedCheckpoints = formattedCheckpoints.map(newCp => {
+        const previousCp = previousCheckpoints.find(oldCp => oldCp.id === newCp.id);
+        if (previousCp && previousCp.visited && !newCp.visited) {
+          // Preserve visited state if it was true before
+          console.log(`🔄 Preserving visited state for checkpoint ${newCp.name}`);
+          return { ...newCp, visited: true };
+        }
+        return newCp;
+      });
+
+      setCheckpoints(mergedCheckpoints);
     } catch (error) {
       console.error("Error fetching round checkpoints:", error);
       setCheckpoints([]);

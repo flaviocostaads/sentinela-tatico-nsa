@@ -41,7 +41,7 @@ export const useClientCheckpointStats = (roundId: string) => {
         throw roundError;
       }
 
-      console.log("Fetching stats for round:", roundId, "Round data:", roundData);
+      console.log("🔍 [useClientCheckpointStats] Fetching stats for round:", roundId, "Round data:", roundData);
 
       // Fetch template checkpoints separately if template_id exists
       let templateCheckpoints = [];
@@ -58,13 +58,13 @@ export const useClientCheckpointStats = (roundId: string) => {
           .order("order_index");
 
         if (checkpointsError) {
-          console.error("Error fetching template checkpoints:", checkpointsError);
+          console.error("❌ [useClientCheckpointStats] Error fetching template checkpoints:", checkpointsError);
         } else {
           templateCheckpoints = checkpointsData || [];
         }
       }
 
-      console.log("Template checkpoints fetched:", templateCheckpoints);
+      console.log("📋 [useClientCheckpointStats] Template checkpoints fetched:", templateCheckpoints?.length || 0, "checkpoints");
 
       // Get completed visits for this round
       const { data: visits, error: visitsError } = await supabase
@@ -86,11 +86,11 @@ export const useClientCheckpointStats = (roundId: string) => {
       const clientStats: ClientStats = {};
 
       if (templateCheckpoints.length > 0) {
-        console.log('Processing template checkpoints for stats:', templateCheckpoints);
+        console.log('📊 [useClientCheckpointStats] Processing template checkpoints for stats:', templateCheckpoints.length);
         
         // Get unique client IDs from template
         const clientIds = [...new Set(templateCheckpoints.map((tc: any) => tc.client_id))];
-        console.log('Client IDs from template:', clientIds);
+        console.log('🏢 [useClientCheckpointStats] Unique client IDs from template:', clientIds);
         
         // For each client, count their PHYSICAL checkpoints (not template entries)
         for (const clientId of clientIds) {
@@ -154,9 +154,13 @@ export const useClientCheckpointStats = (roundId: string) => {
           console.log(`📊 [useClientCheckpointStats] Stats for client ${clientId}:`, clientStats[clientId]);
         }
 
-        console.log('Final client stats calculated:', clientStats);
+        console.log('✅ [useClientCheckpointStats] Final client stats calculated:', clientStats);
+        console.log('📈 [useClientCheckpointStats] Summary:');
+        Object.entries(clientStats).forEach(([clientId, stat]) => {
+          console.log(`   Client ${clientId}: ${stat.completedCheckpoints}/${stat.totalCheckpoints} checkpoints`);
+        });
       } else {
-        console.log('No template checkpoints found, checking for direct client round');
+        console.log('⚠️ [useClientCheckpointStats] No template checkpoints found, checking for direct client round');
         
         // For direct client rounds (fallback)
         if (roundData?.client_id) {
