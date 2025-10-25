@@ -50,6 +50,7 @@ const getBaseMenuItems = (notifications: MenuNotifications) => [
   { icon: SettingsIcon, label: "Config. Combustível", path: "/fuel-configuration", notifications: 0 },
   { icon: Wrench, label: "Manutenção", path: "/maintenance-management", notifications: 0 },
   { icon: ClipboardCheck, label: "Inspeções Veiculares", path: "/vehicle-inspections", notifications: 0 },
+  { icon: ClipboardCheck, label: "Templates de Inspeção", path: "/vehicle-inspection-templates", notifications: 0 },
   { icon: BookOpen, label: "Documentação", path: "/documentation", notifications: 0 },
   { icon: Shield, label: "Logs de Auditoria", path: "/audit-logs", notifications: 0 }
 ];

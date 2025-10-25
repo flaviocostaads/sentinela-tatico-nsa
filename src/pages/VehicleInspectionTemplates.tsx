@@ -3,16 +3,11 @@ import { ArrowLeft, Plus, Pencil, Trash2, Copy, CheckCircle } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { TemplateEditorAdvanced } from "@/components/VehicleInspection/TemplateEditorAdvanced";
 
 interface ChecklistItem {
   id: string;
@@ -314,88 +309,12 @@ const VehicleInspectionTemplates = () => {
 
       {/* Template Editor Dialog */}
       {editingTemplate && (
-        <Dialog open={showEditor} onOpenChange={setShowEditor}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                {editingTemplate.id ? 'Editar Template' : 'Novo Template'}
-              </DialogTitle>
-            </DialogHeader>
-
-            <div className="space-y-4">
-              {/* Basic Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Nome do Template</Label>
-                  <Input
-                    value={editingTemplate.name}
-                    onChange={(e) => setEditingTemplate({
-                      ...editingTemplate,
-                      name: e.target.value
-                    })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Tipo de Veículo</Label>
-                  <select
-                    className="w-full h-10 rounded-md border border-input bg-background px-3 py-2"
-                    value={editingTemplate.vehicle_type}
-                    onChange={(e) => setEditingTemplate({
-                      ...editingTemplate,
-                      vehicle_type: e.target.value as 'car' | 'motorcycle'
-                    })}
-                  >
-                    <option value="car">Carro</option>
-                    <option value="motorcycle">Moto</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <Switch
-                  checked={editingTemplate.active}
-                  onCheckedChange={(checked) => setEditingTemplate({
-                    ...editingTemplate,
-                    active: checked
-                  })}
-                />
-                <Label>Template ativo</Label>
-              </div>
-
-              {/* Categories and Items */}
-              <div>
-                <h3 className="font-semibold mb-4">Categorias e Itens</h3>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Configure as categorias e itens do checklist. Esta é uma versão simplificada - 
-                  para edições completas, acesse o editor avançado.
-                </p>
-                <div className="space-y-4">
-                  {editingTemplate.items.map((category, idx) => (
-                    <Card key={idx}>
-                      <CardHeader>
-                        <CardTitle className="text-base">{category.categoryLabel}</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground">
-                          {category.items.length} ite{category.items.length !== 1 ? 'ns' : 'm'}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowEditor(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={() => handleSaveTemplate(editingTemplate)}>
-                Salvar Template
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <TemplateEditorAdvanced
+          template={editingTemplate}
+          open={showEditor}
+          onOpenChange={setShowEditor}
+          onSave={handleSaveTemplate}
+        />
       )}
 
       {/* Delete Confirmation Dialog */}
