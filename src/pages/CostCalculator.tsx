@@ -15,6 +15,8 @@ import { ResultsDisplay } from "@/components/CostCalculator/ResultsDisplay";
 import { CalculationHistory } from "@/components/CostCalculator/CalculationHistory";
 import { MapSelector } from "@/components/CostCalculator/MapSelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Header from "@/components/Layout/Header";
+import Sidebar from "@/components/Layout/Sidebar";
 
 export default function CostCalculator() {
   const { toast } = useToast();
@@ -200,19 +202,24 @@ export default function CostCalculator() {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">🧮 Calculadora de Custo de Ronda</h1>
-          <p className="text-muted-foreground">
-            Calcule custos operacionais e valores de cobrança para clientes
-          </p>
-        </div>
-        <Button variant="outline" onClick={() => setShowMap(!showMap)}>
-          <Map className="h-4 w-4 mr-2" />
-          {showMap ? "Ocultar Mapa" : "Ver Mapa"}
-        </Button>
-      </div>
+    <div className="flex h-screen overflow-hidden bg-background">
+      <Sidebar />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <Header />
+        <main className="flex-1 overflow-auto">
+          <div className="container mx-auto p-6 space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold">🧮 Calculadora de Custo de Ronda</h1>
+                <p className="text-muted-foreground">
+                  Calcule custos operacionais e valores de cobrança para clientes
+                </p>
+              </div>
+              <Button variant="outline" onClick={() => setShowMap(!showMap)}>
+                <Map className="h-4 w-4 mr-2" />
+                {showMap ? "Ocultar Mapa" : "Ver Mapa"}
+              </Button>
+            </div>
 
       <Tabs defaultValue="calculator" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
@@ -569,6 +576,9 @@ export default function CostCalculator() {
           <CalculationHistory onViewCalculation={handleViewCalculation} />
         </TabsContent>
       </Tabs>
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
