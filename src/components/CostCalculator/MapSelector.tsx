@@ -3,10 +3,11 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { useSecureMapbox } from "@/hooks/useSecureMapbox";
 import { useMapboxDirections } from "@/hooks/useMapboxDirections";
+import { useMapProvider } from "@/hooks/useMapProvider";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, MapPin, CheckCircle, Loader2 } from "lucide-react";
+import { Search, MapPin, CheckCircle, Loader2, Shield, Building2, Star, Phone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -18,12 +19,17 @@ interface MapSelectorProps {
 }
 
 interface SearchResult {
-  type: 'client' | 'address' | 'manual';
+  type: 'client' | 'business' | 'address' | 'manual';
   name: string;
   address?: string;
   lat: number;
   lng: number;
   id?: string;
+  source: 'database' | 'google_places' | 'mapbox';
+  rating?: number;
+  phone?: string;
+  website?: string;
+  user_ratings_total?: number;
 }
 
 interface RouteInfo {
@@ -44,6 +50,7 @@ export const MapSelector = ({
   const tempMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const { token, loading: tokenLoading } = useSecureMapbox();
   const { calculateDistanceBetweenPoints, loading: routeLoading } = useMapboxDirections();
+  const { googleMapsApiKey } = useMapProvider();
   
   const [searchAddress, setSearchAddress] = useState("");
   const [searching, setSearching] = useState(false);
@@ -93,6 +100,7 @@ export const MapSelector = ({
         name: `Localização (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
         lat,
         lng,
+        source: 'mapbox',
       });
     });
 
@@ -137,17 +145,18 @@ export const MapSelector = ({
     setShowResults(true);
     
     try {
-      // 1. Buscar clientes cadastrados primeiro
+      const results: SearchResult[] = [];
+      
+      // ========================================
+      // CAMADA 1: Buscar clientes cadastrados (PRIORIDADE MÁXIMA)
+      // ========================================
       const { data: clients } = await supabase
         .from('clients')
         .select('*')
         .ilike('name', `%${searchAddress}%`)
         .eq('active', true)
-        .limit(5);
+        .limit(3);
 
-      const results: SearchResult[] = [];
-
-      // Adicionar clientes encontrados
       if (clients && clients.length > 0) {
         results.push(...clients.map(c => ({
           type: 'client' as const,
@@ -155,16 +164,56 @@ export const MapSelector = ({
           address: c.address,
           lat: c.lat,
           lng: c.lng,
-          id: c.id
+          id: c.id,
+          source: 'database' as const
         })));
       }
+      
+      // ========================================
+      // CAMADA 2: Google Places API (EMPRESAS/POIs)
+      // ========================================
+      if (googleMapsApiKey && results.length < 5) {
+        try {
+          console.log('Calling Google Places API via edge function...');
+          const { data: placesData, error: placesError } = await supabase.functions.invoke('search-places', {
+            body: { 
+              query: searchAddress,
+              apiKey: googleMapsApiKey,
+              location: baseLocation ? { lat: baseLocation.lat, lng: baseLocation.lng } : null
+            }
+          });
 
-      // 2. Se não encontrou clientes suficientes, buscar via Mapbox Geocoding
+          if (!placesError && placesData?.success && placesData.results?.length > 0) {
+            console.log(`Google Places returned ${placesData.results.length} results`);
+            results.push(...placesData.results.map((place: any) => ({
+              type: 'business' as const,
+              name: place.name,
+              address: place.formatted_address,
+              lat: place.geometry.location.lat,
+              lng: place.geometry.location.lng,
+              source: 'google_places' as const,
+              rating: place.rating,
+              phone: place.formatted_phone_number,
+              website: place.website,
+              user_ratings_total: place.user_ratings_total
+            })));
+          } else if (placesError) {
+            console.error('Google Places API error:', placesError);
+          }
+        } catch (googleError) {
+          console.error('Google Places API error:', googleError);
+          // Continue to Mapbox fallback
+        }
+      }
+
+      // ========================================
+      // CAMADA 3: Mapbox Geocoding (FALLBACK - endereços genéricos)
+      // ========================================
       if (results.length < 5) {
         const response = await fetch(
           `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(
             searchAddress
-          )}.json?access_token=${token}&limit=${5 - results.length}&country=BR`
+          )}.json?access_token=${token}&limit=${5 - results.length}&country=BR&types=poi,address`
         );
         const data = await response.json();
 
@@ -174,7 +223,8 @@ export const MapSelector = ({
             name: f.text,
             address: f.place_name,
             lat: f.center[1],
-            lng: f.center[0]
+            lng: f.center[0],
+            source: 'mapbox' as const
           })));
         }
       }
@@ -186,6 +236,19 @@ export const MapSelector = ({
           title: "Nenhum resultado encontrado",
           description: "Tente buscar por outro termo ou use as coordenadas manuais",
           variant: "destructive"
+        });
+      } else {
+        // Show which source returned the most results
+        const sources = results.map(r => r.source);
+        const primarySource = sources[0];
+        let sourceLabel = '';
+        if (primarySource === 'database') sourceLabel = '✓ Clientes cadastrados';
+        else if (primarySource === 'google_places') sourceLabel = '🏢 Empresas no Google Maps';
+        else sourceLabel = '📍 Endereços encontrados';
+        
+        toast({
+          title: `${results.length} resultado(s) encontrado(s)`,
+          description: sourceLabel,
         });
       }
     } catch (error) {
@@ -389,7 +452,8 @@ export const MapSelector = ({
       type: 'manual',
       name: `Coordenadas (${lat.toFixed(4)}, ${lng.toFixed(4)})`,
       lat: lat,
-      lng: lng
+      lng: lng,
+      source: 'mapbox',
     });
 
     // Limpar inputs
@@ -429,27 +493,76 @@ export const MapSelector = ({
 
           {/* Dropdown de resultados */}
           {showResults && searchResults.length > 0 && (
-            <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-60 overflow-y-auto">
+            <div className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-80 overflow-y-auto">
               {searchResults.map((result, i) => (
                 <div
                   key={i}
                   onClick={() => handleSelectResult(result)}
                   className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 transition-colors"
                 >
-                  <div className="flex items-start gap-2">
-                    <MapPin className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                  <div className="flex items-start gap-3">
+                    {/* Ícone baseado na fonte */}
+                    <div className="flex-shrink-0 mt-0.5">
+                      {result.source === 'database' && (
+                        <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                          <Shield className="h-4 w-4 text-green-600" />
+                        </div>
+                      )}
+                      {result.source === 'google_places' && (
+                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                          <Building2 className="h-4 w-4 text-blue-600" />
+                        </div>
+                      )}
+                      {result.source === 'mapbox' && (
+                        <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
+                          <MapPin className="h-4 w-4 text-orange-600" />
+                        </div>
+                      )}
+                    </div>
+                    
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm flex items-center gap-2">
-                        {result.name}
-                        {result.type === 'client' && (
-                          <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full">
-                            ✓ Cliente Cadastrado
+                      {/* Nome + Badge */}
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className="font-medium text-sm">{result.name}</span>
+                        {result.source === 'database' && (
+                          <span className="text-xs bg-green-500 text-white px-2 py-0.5 rounded-full whitespace-nowrap">
+                            ✓ Cliente
+                          </span>
+                        )}
+                        {result.source === 'google_places' && (
+                          <span className="text-xs bg-blue-500 text-white px-2 py-0.5 rounded-full whitespace-nowrap">
+                            🏢 Google Maps
                           </span>
                         )}
                       </div>
+                      
+                      {/* Endereço */}
                       {result.address && (
-                        <div className="text-xs text-muted-foreground mt-1 truncate">
+                        <div className="text-xs text-muted-foreground mb-1 line-clamp-2">
                           {result.address}
+                        </div>
+                      )}
+                      
+                      {/* Rating e informações extras (Google Places) */}
+                      {result.source === 'google_places' && (
+                        <div className="flex items-center gap-3 mt-2 flex-wrap">
+                          {result.rating && (
+                            <div className="flex items-center gap-1 text-xs">
+                              <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                              <span className="font-medium">{result.rating.toFixed(1)}</span>
+                              {result.user_ratings_total && (
+                                <span className="text-muted-foreground">
+                                  ({result.user_ratings_total})
+                                </span>
+                              )}
+                            </div>
+                          )}
+                          {result.phone && (
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <Phone className="h-3 w-3" />
+                              <span>{result.phone}</span>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
