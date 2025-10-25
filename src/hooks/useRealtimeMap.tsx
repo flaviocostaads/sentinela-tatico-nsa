@@ -36,8 +36,11 @@ export const useRealtimeMap = () => {
   const [activeEmergencies, setActiveEmergencies] = useState<EmergencyIncident[]>([]);
   const [lastUpdateTime, setLastUpdateTime] = useState<Date>(new Date());
   const [isAutoUpdating, setIsAutoUpdating] = useState(false);
+  const [isUserMoving, setIsUserMoving] = useState(false);
   const { toast } = useToast();
   const channelsRef = useRef<any[]>([]);
+  const autoRefreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastPositionRef = useRef<{ lat: number; lng: number } | null>(null);
 
   // Initialize real-time subscriptions and auto-refresh
   useEffect(() => {
@@ -112,26 +115,67 @@ export const useRealtimeMap = () => {
       // Initial data fetch
       fetchAllData();
 
-      // Auto-refresh every 2 seconds as backup
-      const autoRefreshInterval = setInterval(() => {
-        console.log('🔄 Auto-refresh triggered');
-        fetchAllData();
-        setLastUpdateTime(new Date());
-      }, 2000);
-
       setIsAutoUpdating(true);
 
       return () => {
         channelsRef.current.forEach(channel => {
           supabase.removeChannel(channel);
         });
-        clearInterval(autoRefreshInterval);
+        if (autoRefreshIntervalRef.current) {
+          clearInterval(autoRefreshIntervalRef.current);
+          autoRefreshIntervalRef.current = null;
+        }
         setIsAutoUpdating(false);
       };
     };
 
     return initializeRealtime();
   }, []);
+
+  // Detect user movement and enable continuous tracking
+  useEffect(() => {
+    if (userLocations.length === 0) {
+      setIsUserMoving(false);
+      return;
+    }
+
+    const currentLocation = userLocations[0]; // Latest location
+    const currentPos = { lat: currentLocation.lat, lng: currentLocation.lng };
+
+    // Check if user moved (distance > 10 meters)
+    if (lastPositionRef.current) {
+      const distance = calculateDistance(
+        lastPositionRef.current.lat,
+        lastPositionRef.current.lng,
+        currentPos.lat,
+        currentPos.lng
+      );
+      
+      const isMoving = distance > 0.01; // ~10 meters threshold
+      console.log(`📍 Movement detected: ${distance.toFixed(4)} km - ${isMoving ? 'MOVING' : 'STOPPED'}`);
+      
+      setIsUserMoving(isMoving);
+
+      // Start continuous tracking when moving
+      if (isMoving && !autoRefreshIntervalRef.current) {
+        console.log('🚀 Starting continuous GPS tracking (user is moving)');
+        autoRefreshIntervalRef.current = setInterval(() => {
+          console.log('🔄 Auto-refresh (movement tracking)');
+          fetchUserLocations(); // Only track position, not full data
+          setLastUpdateTime(new Date());
+        }, 2000);
+      }
+      
+      // Stop continuous tracking when stopped
+      if (!isMoving && autoRefreshIntervalRef.current) {
+        console.log('⏸️ Stopping continuous tracking (user stopped)');
+        clearInterval(autoRefreshIntervalRef.current);
+        autoRefreshIntervalRef.current = null;
+      }
+    }
+
+    lastPositionRef.current = currentPos;
+  }, [userLocations]);
 
   const fetchAllData = async () => {
     await Promise.all([
@@ -242,12 +286,26 @@ export const useRealtimeMap = () => {
     }
   };
 
+  // Calculate distance between two coordinates (Haversine formula)
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371; // Earth radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Distance in km
+  };
+
   return {
     userLocations,
     clients,
     activeEmergencies,
     lastUpdateTime,
     isAutoUpdating,
+    isUserMoving,
     fetchAllData
   };
 };

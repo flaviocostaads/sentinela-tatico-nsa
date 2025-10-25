@@ -605,22 +605,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
     console.log('👤 ✓ User markers created:', Object.keys(userMarkers.current).length);
     console.log('👤 === TACTICAL USER LOCATIONS UPDATE COMPLETE ===');
 
-    // Fit bounds if locations exist, but only on initial load
-    if (userLocations.length > 0 && !map.current?.isMoving() && !map.current?.isZooming()) {
-      const currentZoom = map.current?.getZoom() || 12;
-      
-      // Only auto-fit if zoom is at default level (12) to avoid interrupting user navigation
-      if (currentZoom <= 12.5) {
-        const bounds = new mapboxgl.LngLatBounds();
-        userLocations.forEach(location => {
-          bounds.extend([location.lng, location.lat]);
-        });
-
-        if (!bounds.isEmpty()) {
-          map.current!.fitBounds(bounds, { padding: 50, maxZoom: 15 });
-        }
-      }
-    }
+    // ZOOM AUTOMÁTICO REMOVIDO - Operador controla o zoom manualmente
   };
 
   const expandMap = () => {
