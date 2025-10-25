@@ -13,6 +13,8 @@ import ChecklistDialog from "./ChecklistDialog";
 import RealTimeRoundMap from "./RealTimeRoundMap";
 import BaseControlDialog from "./BaseControlDialog";
 import SignaturePad from "./SignaturePad";
+import ReturnToBaseDialog from "./ReturnToBaseDialog";
+import RoundCompletionReport from "./RoundCompletionReport";
 
 interface TacticRoundDetailProps {
   roundId: string;
@@ -74,6 +76,8 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
   const [checklistData, setChecklistData] = useState<{photo: string | null, observations: string, checklist: any[]} | null>(null);
   const [requiresRoundSignature, setRequiresRoundSignature] = useState(false);
   const [showFinalSignature, setShowFinalSignature] = useState(false);
+  const [showReturnToBase, setShowReturnToBase] = useState(false);
+  const [showCompletionReport, setShowCompletionReport] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -585,24 +589,15 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
         index < nextIndex || cp.visited
       );
       
+      // NÃO FINALIZAR AUTOMATICAMENTE - mostrar tela de Retorno à Base
       if (allCompleted && nextIndex >= checkpoints.length) {
-        // Update round status to completed
-        try {
-          await supabase
-            .from("rounds")
-            .update({ 
-              status: 'completed',
-              end_time: new Date().toISOString()
-            })
-            .eq("id", roundId);
-          
-          toast({
-            title: "Ronda completa",
-            description: "Todos os checkpoints foram concluídos. Ronda finalizada com sucesso!",
-          });
-        } catch (error) {
-          console.error("Error updating round status:", error);
-        }
+        toast({
+          title: "Checkpoints Concluídos",
+          description: "Todos os pontos foram visitados. Agora retorne à base para finalizar a ronda.",
+        });
+        
+        // Mostrar diálogo de retorno à base
+        setShowReturnToBase(true);
       }
     } catch (error) {
       console.error("Error completing checkpoint:", error);
@@ -793,6 +788,56 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
     }
 
     await finalizeRound();
+  };
+
+  const handleReturnToBaseComplete = async (finalOdometer: number, observations: string) => {
+    try {
+      // Atualizar ronda com odômetro final e status completo
+      const { error } = await supabase
+        .from("rounds")
+        .update({
+          final_odometer: finalOdometer,
+          status: 'completed',
+          end_time: new Date().toISOString()
+        })
+        .eq("id", roundId);
+
+      if (error) throw error;
+
+      // Salvar observações finais se houver
+      if (observations.trim()) {
+        await supabase
+          .from("checkpoint_visits")
+          .insert({
+            round_id: roundId,
+            checkpoint_id: checkpoints[0]?.id, // Reference to first checkpoint
+            status: 'completed',
+            visit_time: new Date().toISOString(),
+            duration: 0,
+            signature_data: observations // Usar campo signature para observações finais
+          });
+      }
+
+      setShowReturnToBase(false);
+      
+      toast({
+        title: "Ronda Finalizada",
+        description: "Ronda concluída com sucesso! Visualize o relatório completo.",
+      });
+
+      // Mostrar relatório de conclusão
+      setTimeout(() => {
+        setShowCompletionReport(true);
+      }, 500);
+      
+    } catch (error) {
+      console.error("Error completing return to base:", error);
+      toast({
+        title: "Erro",
+        description: "Erro ao finalizar ronda",
+        variant: "destructive"
+      });
+    }
   };
 
   const formatTime = (timeString?: string) => {
@@ -1087,6 +1132,24 @@ const TacticRoundDetail = ({ roundId, onBack }: TacticRoundDetailProps) => {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Return to Base Dialog */}
+      <ReturnToBaseDialog
+        open={showReturnToBase}
+        onClose={() => setShowReturnToBase(false)}
+        roundId={roundId}
+        onComplete={handleReturnToBaseComplete}
+      />
+
+      {/* Round Completion Report */}
+      <RoundCompletionReport
+        open={showCompletionReport}
+        onClose={() => {
+          setShowCompletionReport(false);
+          onBack(); // Voltar para lista de rondas
+        }}
+        roundId={roundId}
+      />
     </div>
   );
 };

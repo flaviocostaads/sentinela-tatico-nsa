@@ -841,16 +841,30 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
     console.log('📍 Round checkpoints to display:', roundCheckpoints.length);
     console.log('📍 Current checkpoint markers before clear:', checkpointMarkers.current.length);
 
-    // Prevent unnecessary updates if markers already match
-    if (checkpointMarkers.current.length === roundCheckpoints.length && roundCheckpoints.length > 0) {
+    // CORREÇÃO: Criar mapa de IDs únicos para prevenir duplicação
+    const newCheckpointIds = new Set(roundCheckpoints.map(cp => `${cp.id}_${cp.visited}`));
+    const existingCheckpointIds = new Set(
+      checkpointMarkers.current.map(m => m.getElement()?.dataset.checkpointId).filter(Boolean)
+    );
+
+    // Apenas atualizar se realmente mudou
+    const hasChanges = newCheckpointIds.size !== existingCheckpointIds.size ||
+      ![...newCheckpointIds].every(id => existingCheckpointIds.has(id));
+
+    if (!hasChanges && checkpointMarkers.current.length > 0) {
       console.log('📍 ⚠️ Skipping update - markers already match checkpoints');
       return;
     }
 
-    // CRITICAL: Remove ALL existing checkpoint markers first
+    // CRITICAL: Remove ALL existing checkpoint markers COMPLETAMENTE
+    console.log('📍 Clearing all existing checkpoint markers...');
     checkpointMarkers.current.forEach(marker => {
       if (marker) {
         try {
+          const element = marker.getElement();
+          if (element && element.parentNode) {
+            element.parentNode.removeChild(element);
+          }
           marker.remove();
         } catch (e) {
           console.warn('Error removing checkpoint marker:', e);
@@ -858,6 +872,13 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       }
     });
     checkpointMarkers.current = [];
+    
+    // Força limpeza de markers órfãos no DOM
+    if (map.current?.getContainer()) {
+      const orphanMarkers = map.current.getContainer().querySelectorAll('[data-checkpoint-marker="true"]');
+      orphanMarkers.forEach(marker => marker.remove());
+    }
+    
     console.log('📍 ✓ All checkpoint markers cleared');
 
     // If no checkpoints, just return
@@ -867,10 +888,14 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       return;
     }
 
-    // Add checkpoint markers
+    // Add checkpoint markers with unique IDs
     roundCheckpoints.forEach(checkpoint => {
+      const uniqueId = `${checkpoint.id}_${checkpoint.visited}`;
+      
       // Create checkpoint marker - VERDE se concluído, VERMELHO se pendente
       const el = document.createElement('div');
+      el.dataset.checkpointId = uniqueId;
+      el.dataset.checkpointMarker = 'true'; // Para identificar no cleanup
       el.style.width = '26px';
       el.style.height = '26px';
       el.style.borderRadius = '50%';
@@ -886,6 +911,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       el.style.color = 'white';
       el.style.fontSize = '11px';
       el.style.fontWeight = 'bold';
+      el.style.zIndex = checkpoint.visited ? '1001' : '1000'; // VERDE sempre na frente
       el.textContent = checkpoint.visited ? '✓' : checkpoint.order_index.toString();
 
       const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })

@@ -9,6 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import RouteAnalysisDialog from "./RouteAnalysisDialog";
+import RoutePreviewMap from "./RoutePreviewMap";
 
 interface CreateRoundDialogProps {
   isOpen: boolean;
@@ -37,6 +38,7 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
   const [roundType, setRoundType] = useState<'template' | 'avulsa'>('template');
   const [clientSearch, setClientSearch] = useState('');
   const [showRoutePreview, setShowRoutePreview] = useState(false);
+  const [showRouteMap, setShowRouteMap] = useState(false);
   const [formData, setFormData] = useState({
     template_id: "",
     client_id: ""
@@ -322,18 +324,30 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
                 </SelectContent>
               </Select>
               
-              {/* Botão de prévia de rota */}
+              {/* Botões de prévia de rota */}
               {formData.template_id && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowRoutePreview(true)}
-                  className="w-full mt-2"
-                  size="sm"
-                >
-                  <RouteIcon className="w-4 h-4 mr-2" />
-                  Ver Prévia da Rota (Distância, Tempo, Custo)
-                </Button>
+                <div className="space-y-2 mt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowRouteMap(true)}
+                    className="w-full"
+                    size="sm"
+                  >
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Ver Trajeto Completo no Mapa
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowRoutePreview(true)}
+                    className="w-full"
+                    size="sm"
+                  >
+                    <RouteIcon className="w-4 h-4 mr-2" />
+                    Análise: Distância, Tempo e Custo
+                  </Button>
+                </div>
               )}
             </div>
           )}
@@ -408,15 +422,23 @@ const CreateRoundDialog = ({ isOpen, onClose, onRoundCreated }: CreateRoundDialo
         </form>
       </DialogContent>
       
-      {/* Route Preview Dialog */}
+      {/* Route Preview Dialogs */}
       {formData.template_id && (
-        <RouteAnalysisDialog
-          open={showRoutePreview}
-          onOpenChange={setShowRoutePreview}
-          templateId={formData.template_id}
-          vehicleType="car"
-          roundName={templates.find(t => t.id === formData.template_id)?.name}
-        />
+        <>
+          <RoutePreviewMap
+            open={showRouteMap}
+            onOpenChange={setShowRouteMap}
+            templateId={formData.template_id}
+            templateName={templates.find(t => t.id === formData.template_id)?.name}
+          />
+          <RouteAnalysisDialog
+            open={showRoutePreview}
+            onOpenChange={setShowRoutePreview}
+            templateId={formData.template_id}
+            vehicleType="car"
+            roundName={templates.find(t => t.id === formData.template_id)?.name}
+          />
+        </>
       )}
     </Dialog>
   );
