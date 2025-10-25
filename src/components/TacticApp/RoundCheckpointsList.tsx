@@ -72,12 +72,18 @@ const RoundCheckpointsList = ({
           order_index: cp.order_index,
           checklist_items: cp.checklist_items
         }));
-        console.log(`✅ [RoundCheckpointsList] Setting ${formattedCheckpoints.length} checkpoints:`, 
-          formattedCheckpoints.map(c => `${c.name} (${c.id})`));
+        console.log(`✅ [RoundCheckpointsList] Setting ${formattedCheckpoints.length} checkpoints for client ${clientId}:`);
+        formattedCheckpoints.forEach((cp, idx) => {
+          console.log(`   ${idx + 1}. ${cp.name} (ID: ${cp.id})`);
+        });
         setCheckpoints(formattedCheckpoints);
       } else {
         console.warn(`⚠️ [RoundCheckpointsList] No physical checkpoints found for client ${clientId}`);
-        console.warn(`⚠️ [RoundCheckpointsList] This means the client has no active checkpoints in the database`);
+        console.warn(`⚠️ [RoundCheckpointsList] Query returned:`, checkpointsData);
+        console.warn(`⚠️ [RoundCheckpointsList] This means either:`);
+        console.warn(`   1. Client has no active checkpoints in database`);
+        console.warn(`   2. client_id mismatch`);
+        console.warn(`   3. All checkpoints are inactive (active=false)`);
         setCheckpoints([]);
       }
     } catch (error) {
@@ -133,6 +139,8 @@ const RoundCheckpointsList = ({
       </div>
     );
   }
+
+  console.log(`🎨 [RoundCheckpointsList] Rendering with ${checkpoints.length} checkpoints, loading: ${loading}`);
 
   return (
     <div className="min-h-screen bg-background p-4">

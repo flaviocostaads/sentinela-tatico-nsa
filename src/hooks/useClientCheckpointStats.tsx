@@ -110,7 +110,14 @@ export const useClientCheckpointStats = (roundId: string) => {
 
           let totalCheckpoints = clientCheckpoints?.length || 0;
           console.log(`📍 [useClientCheckpointStats] Client ${clientId} has ${totalCheckpoints} physical checkpoints:`, 
-            clientCheckpoints?.map(c => c.name).join(', '));
+            clientCheckpoints?.map(c => `${c.name} (${c.id})`).join(', '));
+          
+          // ADICIONAR validação:
+          if (totalCheckpoints > 0) {
+            console.log(`✅ [useClientCheckpointStats] Will count ${totalCheckpoints} checkpoints for client`);
+          } else {
+            console.log(`⚠️ [useClientCheckpointStats] No checkpoints found, will use 1 virtual checkpoint`);
+          }
 
           // If no physical checkpoints, we'll have 1 virtual checkpoint
           if (totalCheckpoints === 0) {

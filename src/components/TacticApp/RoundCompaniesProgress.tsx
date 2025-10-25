@@ -40,9 +40,15 @@ const RoundCompaniesProgress = ({
 
   // Debug logs para acompanhar os dados
   useEffect(() => {
-    console.log('RoundCompaniesProgress - Stats updated:', stats);
-    console.log('RoundCompaniesProgress - Total stats:', getTotalStats());
-    console.log('RoundCompaniesProgress - Clients:', clients);
+    const totalStats = getTotalStats();
+    console.log('🔍 [RoundCompaniesProgress] Stats updated:', stats);
+    console.log('🔍 [RoundCompaniesProgress] getTotalStats():', totalStats);
+    console.log('🔍 [RoundCompaniesProgress] Stats breakdown by client:');
+    Object.entries(stats).forEach(([clientId, stat]) => {
+      const client = clients.find(c => c.id === clientId);
+      console.log(`   ${client?.name || clientId}: ${stat.completedCheckpoints}/${stat.totalCheckpoints} checkpoints (${Math.round((stat.completedCheckpoints / stat.totalCheckpoints) * 100)}%)`);
+    });
+    console.log('🔍 [RoundCompaniesProgress] Clients:', clients.map(c => `${c.name} (${c.id})`));
   }, [stats, clients]);
 
   const [selectedCheckpoint, setSelectedCheckpoint] = useState<string | null>(null);
