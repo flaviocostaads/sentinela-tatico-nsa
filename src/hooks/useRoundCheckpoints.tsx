@@ -148,7 +148,21 @@ export const useRoundCheckpoints = () => {
       console.log("Checkpoint visits:", visits);
 
       // Format checkpoints with visit status
+      // Store checkpoint visits more efficiently
+      const visitedCheckpointsByRound = new Map<string, Set<string>>();
+      visits?.forEach((visit) => {
+        if (!visitedCheckpointsByRound.has(visit.round_id)) {
+          visitedCheckpointsByRound.set(visit.round_id, new Set());
+        }
+        visitedCheckpointsByRound.get(visit.round_id)?.add(visit.checkpoint_id);
+      });
+
+      console.log("📍 [useRoundCheckpoints] Visited checkpoints by round:", Object.fromEntries(visitedCheckpointsByRound));
+      
       const formattedCheckpoints: RoundCheckpoint[] = [];
+      
+      // Track added checkpoints to prevent duplicates
+      const addedCheckpoints = new Set<string>();
       
       console.log("Processing template checkpoints:", templateCheckpoints?.length || 0);
       
@@ -171,6 +185,13 @@ export const useRoundCheckpoints = () => {
           checkpointsForClient.forEach((checkpoint, cpIndex) => {
             console.log(`  Processing individual checkpoint ${cpIndex + 1}:`, checkpoint);
             
+            // Create unique key to prevent duplicates
+            const checkpointKey = `${activeRound.id}_${checkpoint.id}`;
+            if (addedCheckpoints.has(checkpointKey)) {
+              console.log(`  ⚠️ Skipping duplicate checkpoint ${checkpoint.name} for round ${activeRound.id}`);
+              return;
+            }
+            
             // Use checkpoint coordinates if available, otherwise fallback to client coordinates
             const clientCoords = clientCoordinates.get(tc.client_id);
             const checkpointLat = checkpoint.lat || clientCoords?.lat;
@@ -178,7 +199,7 @@ export const useRoundCheckpoints = () => {
             
             if (checkpointLat && checkpointLng) {
               const checkpointId = checkpoint.id;
-              const isVisited = visits?.some(v => v.checkpoint_id === checkpointId && v.round_id === activeRound.id) || false;
+              const isVisited = visitedCheckpointsByRound.get(activeRound.id)?.has(checkpointId) || false;
               
               const formattedCheckpoint = {
                 id: checkpointId,
@@ -193,7 +214,8 @@ export const useRoundCheckpoints = () => {
                 manual_code: checkpoint.manual_code
               };
               
-              console.log("  Adding checkpoint to list:", formattedCheckpoint);
+              addedCheckpoints.add(checkpointKey);
+              console.log("  ✅ Adding checkpoint to list:", formattedCheckpoint);
               console.log(`    Using ${checkpoint.lat ? 'checkpoint' : 'client'} coordinates`);
               formattedCheckpoints.push(formattedCheckpoint);
             } else {
@@ -207,23 +229,31 @@ export const useRoundCheckpoints = () => {
           if (clientCoords?.lat && clientCoords?.lng) {
             // Create a virtual checkpoint ID based on the template checkpoint
             const virtualCheckpointId = `virtual_${tc.id}`;
-            const isVisited = visits?.some(v => v.checkpoint_id === virtualCheckpointId && v.round_id === activeRound.id) || false;
+            const virtualCheckpointKey = `${activeRound.id}_${virtualCheckpointId}`;
             
-            const virtualCheckpoint = {
-              id: virtualCheckpointId,
-              name: clientCoords.name || 'Checkpoint Principal',
-              lat: Number(clientCoords.lat),
-              lng: Number(clientCoords.lng),
-              visited: isVisited,
-              round_id: activeRound.id,
-              client_id: tc.client_id,
-              order_index: tc.order_index,
-              qr_code: undefined,
-              manual_code: undefined
-            };
-            
-            console.log(`  ✨ Created virtual checkpoint for client without physical checkpoints:`, virtualCheckpoint);
-            formattedCheckpoints.push(virtualCheckpoint);
+            // Check if already added to prevent duplicates
+            if (!addedCheckpoints.has(virtualCheckpointKey)) {
+              const isVisited = visitedCheckpointsByRound.get(activeRound.id)?.has(virtualCheckpointId) || false;
+              
+              const virtualCheckpoint = {
+                id: virtualCheckpointId,
+                name: clientCoords.name || 'Checkpoint Principal',
+                lat: Number(clientCoords.lat),
+                lng: Number(clientCoords.lng),
+                visited: isVisited,
+                round_id: activeRound.id,
+                client_id: tc.client_id,
+                order_index: tc.order_index,
+                qr_code: undefined,
+                manual_code: undefined
+              };
+              
+              addedCheckpoints.add(virtualCheckpointKey);
+              console.log(`  ✨ Created virtual checkpoint for client without physical checkpoints:`, virtualCheckpoint);
+              formattedCheckpoints.push(virtualCheckpoint);
+            } else {
+              console.log(`  ⚠️ Skipping duplicate virtual checkpoint for client ${tc.client_id}`);
+            }
           } else {
             console.warn(`  ⚠️ Client ${tc.client_id} has no checkpoints and no coordinates! Cannot create virtual checkpoint.`);
           }

@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -56,6 +57,13 @@ const Users = () => {
   
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
   const [resetPasswordDialogOpen, setResetPasswordDialogOpen] = useState(false);
+  const [deleteAdminDialogOpen, setDeleteAdminDialogOpen] = useState(false);
+  const [deleteAdminData, setDeleteAdminData] = useState({
+    userId: "",
+    userName: "",
+    password1: "",
+    password2: ""
+  });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -268,11 +276,28 @@ const Users = () => {
     }
   };
 
-  const deleteUser = async (userId: string, userName: string) => {
+  const deleteUser = async (userId: string, userName: string, userRole: string) => {
+    // Check if deleting an admin - require double password confirmation
+    if (userRole === "admin") {
+      setDeleteAdminData({
+        userId,
+        userName,
+        password1: "",
+        password2: ""
+      });
+      setDeleteAdminDialogOpen(true);
+      return;
+    }
+
+    // For non-admin users, use standard confirmation
     if (!confirm(`Tem certeza que deseja EXCLUIR PERMANENTEMENTE o usuário ${userName}? Esta ação não pode ser desfeita.`)) {
       return;
     }
 
+    await executeDelete(userId, userName);
+  };
+
+  const executeDelete = async (userId: string, userName: string) => {
     try {
       // Get current user info for audit log
       const { data: currentUser } = await supabase.auth.getUser();
@@ -305,6 +330,49 @@ const Users = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleDeleteAdmin = async () => {
+    // Validate passwords are entered
+    if (!deleteAdminData.password1 || !deleteAdminData.password2) {
+      toast({
+        title: "Erro",
+        description: "Por favor, digite a senha do administrador duas vezes.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate passwords match
+    if (deleteAdminData.password1 !== deleteAdminData.password2) {
+      toast({
+        title: "Erro",
+        description: "As senhas não coincidem. Por favor, digite a mesma senha duas vezes.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Verify current user's password
+    const { data: currentUser } = await supabase.auth.getUser();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: currentUser.user?.email || "",
+      password: deleteAdminData.password1
+    });
+
+    if (error) {
+      toast({
+        title: "Erro",
+        description: "Senha do administrador incorreta.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Close dialog and execute delete
+    setDeleteAdminDialogOpen(false);
+    await executeDelete(deleteAdminData.userId, deleteAdminData.userName);
+    setDeleteAdminData({ userId: "", userName: "", password1: "", password2: "" });
   };
 
   const getRoleIcon = (role: string) => {
@@ -585,6 +653,60 @@ const Users = () => {
                 </form>
               </DialogContent>
             </Dialog>
+
+            {/* AlertDialog para excluir administrador com dupla confirmação de senha */}
+            <AlertDialog open={deleteAdminDialogOpen} onOpenChange={setDeleteAdminDialogOpen}>
+              <AlertDialogContent className="max-w-md">
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="text-tactical-red">
+                    ⚠️ Confirmação de Exclusão de Administrador
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="space-y-2">
+                    <p className="font-semibold text-foreground">
+                      Você está prestes a EXCLUIR PERMANENTEMENTE o administrador: <span className="text-tactical-red">{deleteAdminData.userName}</span>
+                    </p>
+                    <p className="text-sm">
+                      Por segurança, digite sua senha de administrador <strong>DUAS VEZES</strong> para confirmar esta ação irreversível.
+                    </p>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="password1">Digite sua senha de administrador (1ª vez)</Label>
+                    <Input
+                      id="password1"
+                      type="password"
+                      value={deleteAdminData.password1}
+                      onChange={(e) => setDeleteAdminData({ ...deleteAdminData, password1: e.target.value })}
+                      placeholder="Digite sua senha"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="password2">Digite sua senha de administrador (2ª vez)</Label>
+                    <Input
+                      id="password2"
+                      type="password"
+                      value={deleteAdminData.password2}
+                      onChange={(e) => setDeleteAdminData({ ...deleteAdminData, password2: e.target.value })}
+                      placeholder="Digite sua senha novamente"
+                    />
+                  </div>
+                </div>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => {
+                    setDeleteAdminData({ userId: "", userName: "", password1: "", password2: "" });
+                  }}>
+                    Cancelar
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleDeleteAdmin}
+                    className="bg-tactical-red hover:bg-tactical-red/90"
+                  >
+                    Excluir Permanentemente
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
 
           {/* Barra de pesquisa e toggle de visualização */}
@@ -722,7 +844,7 @@ const Users = () => {
                                   <Button
                                     size="sm"
                                     variant="destructive"
-                                    onClick={() => deleteUser(profile.user_id, profile.name)}
+                                    onClick={() => deleteUser(profile.user_id, profile.name, profile.role)}
                                     className="bg-tactical-red hover:bg-tactical-red/90 w-full"
                                   >
                                     <Trash2 className="w-4 h-4 mr-1" />
@@ -805,7 +927,7 @@ const Users = () => {
                                 <Button
                                   size="sm"
                                   variant="destructive"
-                                  onClick={() => deleteUser(profile.user_id, profile.name)}
+                                  onClick={() => deleteUser(profile.user_id, profile.name, profile.role)}
                                   className="bg-tactical-red hover:bg-tactical-red/90"
                                 >
                                   <Trash2 className="w-4 h-4 mr-1" />
