@@ -344,7 +344,6 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
         
         // Create client marker with number badge
         const el = document.createElement('div');
-        el.style.position = 'relative';
         el.style.width = '28px';
         el.style.height = '28px';
         el.style.borderRadius = '50%';
@@ -391,7 +390,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
           `;
         }
 
-        const marker = new mapboxgl.Marker(el)
+        const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
           .setLngLat([client.lng, client.lat])
           .setPopup(
             new mapboxgl.Popup({ offset: 25, maxWidth: '300px' }).setHTML(`
@@ -466,7 +465,6 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       el.style.alignItems = 'center';
       el.style.justifyContent = 'center';
       el.style.fontSize = '20px';
-      el.style.position = 'relative';
       el.style.zIndex = hasActiveEmergency ? '1000' : '100';
       el.textContent = vehicleIcon;
       
@@ -905,7 +903,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       el.style.fontWeight = 'bold';
       el.textContent = checkpoint.visited ? '✓' : checkpoint.order_index.toString();
 
-      const marker = new mapboxgl.Marker(el)
+      const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
         .setLngLat([checkpoint.lng, checkpoint.lat])
         .setPopup(
           new mapboxgl.Popup({ offset: 25, maxWidth: '300px' }).setHTML(`
