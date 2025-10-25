@@ -286,6 +286,129 @@ export type Database = {
         }
         Relationships: []
       }
+      cost_calculations: {
+        Row: {
+          base_location: Json | null
+          calculation_name: string
+          client_id: string | null
+          client_location: Json | null
+          client_name: string
+          created_at: string | null
+          created_by: string
+          daily_distance: number
+          daily_fuel_cost: number
+          daily_labor_cost: number
+          days_per_month: number
+          distance_base_to_client: number
+          fuel_efficiency: number
+          fuel_price_per_liter: number
+          fuel_type: string
+          hourly_rate: number | null
+          id: string
+          monthly_distance: number
+          monthly_fuel_cost: number
+          monthly_labor_cost: number
+          notes: string | null
+          other_monthly_costs: number | null
+          profit_margin: number | null
+          rounds_per_day: number
+          route_geometry: Json | null
+          status: string | null
+          suggested_price: number
+          tactical_salary: number
+          time_per_round: number
+          total_monthly_cost: number
+          updated_at: string | null
+          vehicle_id: string | null
+          vehicle_type: string
+        }
+        Insert: {
+          base_location?: Json | null
+          calculation_name: string
+          client_id?: string | null
+          client_location?: Json | null
+          client_name: string
+          created_at?: string | null
+          created_by: string
+          daily_distance: number
+          daily_fuel_cost: number
+          daily_labor_cost: number
+          days_per_month: number
+          distance_base_to_client: number
+          fuel_efficiency: number
+          fuel_price_per_liter: number
+          fuel_type: string
+          hourly_rate?: number | null
+          id?: string
+          monthly_distance: number
+          monthly_fuel_cost: number
+          monthly_labor_cost: number
+          notes?: string | null
+          other_monthly_costs?: number | null
+          profit_margin?: number | null
+          rounds_per_day: number
+          route_geometry?: Json | null
+          status?: string | null
+          suggested_price: number
+          tactical_salary: number
+          time_per_round: number
+          total_monthly_cost: number
+          updated_at?: string | null
+          vehicle_id?: string | null
+          vehicle_type: string
+        }
+        Update: {
+          base_location?: Json | null
+          calculation_name?: string
+          client_id?: string | null
+          client_location?: Json | null
+          client_name?: string
+          created_at?: string | null
+          created_by?: string
+          daily_distance?: number
+          daily_fuel_cost?: number
+          daily_labor_cost?: number
+          days_per_month?: number
+          distance_base_to_client?: number
+          fuel_efficiency?: number
+          fuel_price_per_liter?: number
+          fuel_type?: string
+          hourly_rate?: number | null
+          id?: string
+          monthly_distance?: number
+          monthly_fuel_cost?: number
+          monthly_labor_cost?: number
+          notes?: string | null
+          other_monthly_costs?: number | null
+          profit_margin?: number | null
+          rounds_per_day?: number
+          route_geometry?: Json | null
+          status?: string | null
+          suggested_price?: number
+          tactical_salary?: number
+          time_per_round?: number
+          total_monthly_cost?: number
+          updated_at?: string | null
+          vehicle_id?: string | null
+          vehicle_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cost_calculations_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cost_calculations_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fuel_price_config: {
         Row: {
           active: boolean | null

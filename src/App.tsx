@@ -33,6 +33,7 @@ import QRScannerPage from "./pages/QRScanner";
 import FuelConfiguration from "./pages/FuelConfiguration";
 import VehicleInspections from "./pages/VehicleInspections";
 import VehicleInspectionDetail from "./pages/VehicleInspectionDetail";
+import CostCalculator from "./pages/CostCalculator";
 
 const queryClient = new QueryClient();
 
@@ -202,6 +203,11 @@ const App = () => (
               <Route path="/vehicle-inspections/:id" element={
                 <ProtectedRoute>
                   <VehicleInspectionDetail />
+                </ProtectedRoute>
+              } />
+              <Route path="/cost-calculator" element={
+                <ProtectedRoute>
+                  <CostCalculator />
                 </ProtectedRoute>
               } />
               <Route path="*" element={<NotFound />} />

@@ -15,7 +15,8 @@ import {
   BookOpen,
   Layers,
   ClipboardCheck,
-  Settings as SettingsIcon
+  Settings as SettingsIcon,
+  Calculator
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate, useLocation } from "react-router-dom";
