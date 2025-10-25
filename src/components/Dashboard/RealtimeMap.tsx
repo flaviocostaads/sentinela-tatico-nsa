@@ -66,6 +66,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
   const map = useRef<mapboxgl.Map | null>(null);
   const userMarkers = useRef<{ [key: string]: mapboxgl.Marker }>({});
   const [roundCheckpoints, setRoundCheckpoints] = useState<RoundCheckpoint[]>([]);
+  const [plannedRoutes, setPlannedRoutes] = useState<any[]>([]); // Planned routes for active rounds
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<any>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -661,6 +662,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       if (!activeRounds || activeRounds.length === 0) {
         console.log('📍 No active rounds - clearing checkpoints');
         setRoundCheckpoints([]);
+        setPlannedRoutes([]); // Clear planned routes too
         return;
       }
 
@@ -670,6 +672,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       if (templateIds.length === 0) {
         console.log('📍 No template-based rounds found - clearing checkpoints');
         setRoundCheckpoints([]);
+        setPlannedRoutes([]);
         return;
       }
 
@@ -741,7 +744,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       
       console.log('Clients data fetched for coordinates:', clientsData);
 
-      // Get checkpoint visits for these rounds
+      // CRITICAL: Get ALL checkpoint visits for these rounds
       const { data: visits, error: visitsError } = await supabase
         .from("checkpoint_visits")
         .select("checkpoint_id, round_id")
@@ -752,9 +755,9 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
         throw visitsError;
       }
 
-      console.log('Checkpoint visits:', visits);
+      console.log('📍 CRITICAL: All checkpoint visits fetched:', visits?.length || 0, visits);
 
-      // Format checkpoints with visit status
+      // Format checkpoints with visit status - SEMPRE PRESERVE VISITED STATUS
       const formattedCheckpoints: RoundCheckpoint[] = [];
       
       console.log('Processing template checkpoints:', templateCheckpoints?.length || 0);
@@ -787,14 +790,21 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
           
           if (lat && lng) {
             const checkpointId = checkpoint.id;
-            const isVisited = visits?.some(v => v.checkpoint_id === checkpointId && v.round_id === activeRound.id) || false;
+            
+            // CRITICAL: Check if this checkpoint was visited in THIS specific round
+            const isVisited = visits?.some(v => 
+              v.checkpoint_id === checkpointId && 
+              v.round_id === activeRound.id
+            ) || false;
+            
+            console.log(`  Checkpoint ${checkpoint.name} (${checkpointId}) - Visited: ${isVisited}`);
             
             const formattedCheckpoint = {
               id: checkpointId,
               name: checkpoint.name,
               lat: Number(lat),
               lng: Number(lng),
-              visited: isVisited,
+              visited: isVisited, // This should NEVER change back to false once true
               round_id: activeRound.id,
               client_id: tc.client_id,
               client_name: clientData?.name || checkpoint.name,
@@ -802,7 +812,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
               order_index: checkpoint.order_index
             };
             
-            console.log("✓ Adding checkpoint to map:", formattedCheckpoint);
+            console.log("✓ Adding checkpoint to map with visited status:", formattedCheckpoint.visited);
             formattedCheckpoints.push(formattedCheckpoint);
           } else {
             console.warn("⚠️ Checkpoint and client both missing coordinates:", checkpoint, clientData);
@@ -816,18 +826,15 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       });
 
       console.log('📍 ✓ Final checkpoint count for ACTIVE rounds:', formattedCheckpoints.length);
+      console.log('📍 ✓ Visited checkpoints:', formattedCheckpoints.filter(c => c.visited).length);
       console.log('📍 === CHECKPOINT FETCH COMPLETE ===\n');
       
-      // Only update if checkpoints actually changed to prevent flickering
-      setRoundCheckpoints(prev => {
-        const hasChanged = JSON.stringify(prev) !== JSON.stringify(formattedCheckpoints);
-        if (hasChanged) {
-          console.log('📍 Checkpoints changed - updating state');
-          return formattedCheckpoints;
-        }
-        console.log('📍 Checkpoints unchanged - skipping update');
-        return prev;
-      });
+      // SEMPRE atualizar para garantir que visits sejam refletidos
+      console.log('📍 Updating checkpoint state...');
+      setRoundCheckpoints(formattedCheckpoints);
+      
+      // Calcular e desenhar rota planejada para cada ronda ativa
+      await calculateAndDrawPlannedRoutes(activeRounds, formattedCheckpoints);
     } catch (error) {
       console.error("📍 Error fetching round checkpoints:", error);
       setRoundCheckpoints([]);
@@ -839,24 +846,10 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
 
     console.log('📍 === UPDATING CHECKPOINT MARKERS (ACTIVE ROUNDS ONLY) ===');
     console.log('📍 Round checkpoints to display:', roundCheckpoints.length);
+    console.log('📍 Visited checkpoints:', roundCheckpoints.filter(c => c.visited).length);
     console.log('📍 Current checkpoint markers before clear:', checkpointMarkers.current.length);
 
-    // CORREÇÃO: Criar mapa de IDs únicos para prevenir duplicação
-    const newCheckpointIds = new Set(roundCheckpoints.map(cp => `${cp.id}_${cp.visited}`));
-    const existingCheckpointIds = new Set(
-      checkpointMarkers.current.map(m => m.getElement()?.dataset.checkpointId).filter(Boolean)
-    );
-
-    // Apenas atualizar se realmente mudou
-    const hasChanges = newCheckpointIds.size !== existingCheckpointIds.size ||
-      ![...newCheckpointIds].every(id => existingCheckpointIds.has(id));
-
-    if (!hasChanges && checkpointMarkers.current.length > 0) {
-      console.log('📍 ⚠️ Skipping update - markers already match checkpoints');
-      return;
-    }
-
-    // CRITICAL: Remove ALL existing checkpoint markers COMPLETAMENTE
+    // CRITICAL: SEMPRE LIMPAR E RECRIAR para garantir estado correto
     console.log('📍 Clearing all existing checkpoint markers...');
     checkpointMarkers.current.forEach(marker => {
       if (marker) {
@@ -888,14 +881,15 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       return;
     }
 
-    // Add checkpoint markers with unique IDs
-    roundCheckpoints.forEach(checkpoint => {
-      const uniqueId = `${checkpoint.id}_${checkpoint.visited}`;
+    // Add checkpoint markers - SEMPRE baseado no estado atual
+    roundCheckpoints.forEach((checkpoint, idx) => {
+      console.log(`📍 Creating marker ${idx + 1}/${roundCheckpoints.length} - ${checkpoint.name} - Visited: ${checkpoint.visited}`);
       
       // Create checkpoint marker - VERDE se concluído, VERMELHO se pendente
       const el = document.createElement('div');
-      el.dataset.checkpointId = uniqueId;
-      el.dataset.checkpointMarker = 'true'; // Para identificar no cleanup
+      el.dataset.checkpointId = `${checkpoint.id}`;
+      el.dataset.checkpointMarker = 'true';
+      el.dataset.visited = checkpoint.visited.toString(); // Store visited state
       el.style.width = '26px';
       el.style.height = '26px';
       el.style.borderRadius = '50%';
@@ -912,6 +906,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       el.style.fontSize = '11px';
       el.style.fontWeight = 'bold';
       el.style.zIndex = checkpoint.visited ? '1001' : '1000'; // VERDE sempre na frente
+      el.style.position = 'relative'; // Ensure proper stacking
       el.textContent = checkpoint.visited ? '✓' : checkpoint.order_index.toString();
 
       const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
@@ -968,10 +963,129 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
         .addTo(map.current!);
 
       checkpointMarkers.current.push(marker);
+      console.log(`  ✓ Marker created for ${checkpoint.name} - ${checkpoint.visited ? 'GREEN (visited)' : 'RED (pending)'}`);
     });
 
     console.log('📍 ✓ Checkpoint markers created:', checkpointMarkers.current.length);
+    console.log('📍 ✓ Green (visited) markers:', roundCheckpoints.filter(c => c.visited).length);
+    console.log('📍 ✓ Red (pending) markers:', roundCheckpoints.filter(c => !c.visited).length);
     console.log('📍 === CHECKPOINT MARKERS UPDATE COMPLETE ===');
+  };
+
+  // Calculate and draw planned route for active rounds
+  const calculateAndDrawPlannedRoutes = async (activeRounds: any[], checkpoints: RoundCheckpoint[]) => {
+    if (!map.current || !mapboxToken) return;
+
+    console.log('🛣️ === CALCULATING PLANNED ROUTES ===');
+    
+    try {
+      const newPlannedRoutes: any[] = [];
+
+      for (const round of activeRounds) {
+        // Get checkpoints for this round, ordered
+        const roundCheckpoints = checkpoints
+          .filter(cp => cp.round_id === round.id)
+          .sort((a, b) => a.order_index - b.order_index);
+
+        if (roundCheckpoints.length === 0) continue;
+
+        // Get user's current location for this round
+        const userLocation = userLocations.find(ul => ul.rounds?.id === round.id);
+        
+        if (!userLocation) {
+          console.log('No user location found for round:', round.id);
+          continue;
+        }
+
+        // Build waypoints: start location + all checkpoints
+        const waypoints = [
+          `${userLocation.lng},${userLocation.lat}`, // Start point
+          ...roundCheckpoints.map(cp => `${cp.lng},${cp.lat}`)
+        ];
+
+        console.log('🛣️ Calculating route with waypoints:', waypoints.length);
+
+        // Call Mapbox Directions API
+        const coordinates = waypoints.join(';');
+        const directionsUrl = `https://api.mapbox.com/directions/v5/mapbox/driving/${coordinates}?geometries=geojson&overview=full&steps=false&access_token=${mapboxToken}`;
+
+        const response = await fetch(directionsUrl);
+        const data = await response.json();
+
+        if (data.routes && data.routes.length > 0) {
+          const route = data.routes[0];
+          newPlannedRoutes.push({
+            round_id: round.id,
+            geometry: route.geometry,
+            distance: route.distance,
+            duration: route.duration
+          });
+
+          console.log(`✓ Route calculated for round ${round.id}: ${(route.distance / 1000).toFixed(2)} km`);
+        }
+      }
+
+      setPlannedRoutes(newPlannedRoutes);
+      drawPlannedRoutesOnMap(newPlannedRoutes);
+
+    } catch (error) {
+      console.error('Error calculating planned routes:', error);
+    }
+
+    console.log('🛣️ === PLANNED ROUTES CALCULATION COMPLETE ===');
+  };
+
+  // Draw planned routes on map as blue lines
+  const drawPlannedRoutesOnMap = (routes: any[]) => {
+    if (!map.current) return;
+
+    console.log('🎨 Drawing planned routes on map:', routes.length);
+
+    // Remove existing route layers
+    if (map.current.getLayer('planned-route-line')) {
+      map.current.removeLayer('planned-route-line');
+    }
+    if (map.current.getSource('planned-route')) {
+      map.current.removeSource('planned-route');
+    }
+
+    if (routes.length === 0) return;
+
+    // Combine all routes into one GeoJSON
+    const features = routes.map(route => ({
+      type: 'Feature' as const,
+      properties: { round_id: route.round_id },
+      geometry: route.geometry
+    }));
+
+    const routeGeoJSON = {
+      type: 'FeatureCollection' as const,
+      features
+    };
+
+    // Add source
+    map.current.addSource('planned-route', {
+      type: 'geojson',
+      data: routeGeoJSON
+    });
+
+    // Add line layer (blue line)
+    map.current.addLayer({
+      id: 'planned-route-line',
+      type: 'line',
+      source: 'planned-route',
+      layout: {
+        'line-join': 'round',
+        'line-cap': 'round'
+      },
+      paint: {
+        'line-color': '#3b82f6', // Blue color
+        'line-width': 4,
+        'line-opacity': 0.8
+      }
+    });
+
+    console.log('✓ Planned routes drawn on map');
   };
 
   const refreshMap = () => {
