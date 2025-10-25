@@ -622,22 +622,22 @@ export const MapSelector = ({
             <CardContent className="p-4">
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <div className="text-2xl font-bold text-primary">
+                  <div className="text-2xl font-bold text-blue-500 dark:text-blue-400">
                     {routeInfo.distanceKm.toFixed(1)} km
                   </div>
-                  <div className="text-xs text-muted-foreground">Distância (ida)</div>
+                  <div className="text-xs text-foreground/70">Distância (ida)</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-green-600">
+                  <div className="text-2xl font-bold text-green-500 dark:text-green-400">
                     {routeInfo.durationMinutes.toFixed(0)} min
                   </div>
-                  <div className="text-xs text-muted-foreground">Tempo estimado</div>
+                  <div className="text-xs text-foreground/70">Tempo estimado</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-purple-600">
+                  <div className="text-2xl font-bold text-purple-500 dark:text-purple-400">
                     {(routeInfo.distanceKm * 2).toFixed(1)} km
                   </div>
-                  <div className="text-xs text-muted-foreground">Ida + Volta</div>
+                  <div className="text-xs text-foreground/70">Ida + Volta</div>
                 </div>
               </div>
             </CardContent>

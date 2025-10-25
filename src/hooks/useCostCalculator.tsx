@@ -98,11 +98,14 @@ export const useCostCalculator = () => {
       
       const results = calculateCosts(input);
       
+      // Remover campos calculados que não existem no banco
+      const { cost_per_km, fuel_consumption_monthly, hourly_rate_calculated, ...resultsToSave } = results;
+      
       const { data, error } = await supabase
         .from('cost_calculations')
         .insert({
           ...input,
-          ...results,
+          ...resultsToSave,
           created_by: user.id
         })
         .select()

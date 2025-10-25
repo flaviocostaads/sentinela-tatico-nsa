@@ -81,7 +81,7 @@ export const ResultsDisplay = ({ results }: ResultsDisplayProps) => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-4xl font-bold text-primary">
+          <div className="text-4xl font-bold text-emerald-600 dark:text-emerald-400">
             {formatCost(results.suggested_price)}
             <span className="text-sm font-normal text-muted-foreground ml-2">/mês</span>
           </div>

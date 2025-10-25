@@ -436,16 +436,16 @@ export default function CostCalculator() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="time_per_round">Tempo por Ronda (h)</Label>
+                  <Label htmlFor="time_per_round">Tempo por Ronda (min)</Label>
                   <Input
                     id="time_per_round"
                     type="number"
-                    step="0.1"
-                    value={formData.time_per_round}
+                    step="1"
+                    value={Math.round(formData.time_per_round * 60)}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        time_per_round: parseFloat(e.target.value),
+                        time_per_round: parseFloat(e.target.value) / 60,
                       })
                     }
                   />
