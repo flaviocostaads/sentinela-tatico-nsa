@@ -6,6 +6,7 @@ import { useCostCalculator } from "@/hooks/useCostCalculator";
 import { formatCost } from "@/utils/routeCalculations";
 import { Eye, Trash2, FileText } from "lucide-react";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,6 +25,7 @@ interface CalculationHistoryProps {
 export const CalculationHistory = ({ onViewCalculation }: CalculationHistoryProps) => {
   const { calculations, loading, fetchCalculations, deleteCalculation } = useCostCalculator();
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchCalculations();
@@ -104,6 +106,8 @@ export const CalculationHistory = ({ onViewCalculation }: CalculationHistoryProp
                     variant="ghost"
                     size="sm"
                     onClick={() => onViewCalculation?.(calc)}
+                    className="hover:bg-primary/10 hover:text-primary"
+                    title="Visualizar"
                   >
                     <Eye className="h-4 w-4" />
                   </Button>
@@ -111,9 +115,15 @@ export const CalculationHistory = ({ onViewCalculation }: CalculationHistoryProp
                     variant="ghost"
                     size="sm"
                     onClick={() => {
+                      toast({
+                        title: "Download iniciado",
+                        description: "Gerando relatório em PDF...",
+                      });
                       // TODO: Implementar geração de PDF
                       console.log('Generate PDF for:', calc.id);
                     }}
+                    className="hover:bg-primary/10 hover:text-primary"
+                    title="Baixar PDF"
                   >
                     <FileText className="h-4 w-4" />
                   </Button>
@@ -121,6 +131,8 @@ export const CalculationHistory = ({ onViewCalculation }: CalculationHistoryProp
                     variant="ghost"
                     size="sm"
                     onClick={() => setDeleteId(calc.id)}
+                    className="hover:bg-destructive/10 hover:text-destructive"
+                    title="Excluir"
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

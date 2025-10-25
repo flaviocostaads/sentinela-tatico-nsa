@@ -236,8 +236,8 @@ const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isE
         )}
       </GoogleMap>
 
-      {/* Stats Overlay */}
-      <div className="absolute top-4 left-4 right-4 flex gap-2 pointer-events-none">
+      {/* Stats Overlay - Top Left */}
+      <div className="absolute top-4 left-4 flex gap-2 pointer-events-none z-10">
         <Badge className="bg-background/90 backdrop-blur pointer-events-auto">
           <Users className="w-3 h-3 mr-1" />
           {userLocations.length} Táticos
@@ -252,6 +252,19 @@ const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isE
             {activeEmergencies.length} Emergências
           </Badge>
         )}
+      </div>
+
+      {/* Auto Update Badge - Bottom Left */}
+      <div className="absolute bottom-4 left-4 pointer-events-none z-10">
+        <Badge className="bg-background/95 backdrop-blur pointer-events-auto flex items-center gap-2">
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          <span className="text-xs">Auto Atualização Online</span>
+          {lastUpdateTime && (
+            <span className="text-xs text-muted-foreground">
+              {new Date(lastUpdateTime).toLocaleTimeString()}
+            </span>
+          )}
+        </Badge>
       </div>
     </div>
   );
@@ -317,39 +330,29 @@ const GoogleRealtimeMap = ({ apiKey, defaultCity = 'São Paulo, SP, Brasil', isE
   return (
     <Card className="h-[600px]">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <div className="flex items-center gap-4 flex-1">
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="w-5 h-5" />
-            Mapa em Tempo Real - Google Maps
-          </CardTitle>
-          <div className="flex items-center gap-2 flex-1 max-w-md">
-            <Input
-              placeholder="Buscar empresa..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              className="h-8"
-            />
-            <Button size="sm" variant="outline" onClick={handleSearch}>
-              <Search className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={fetchAllData}>
-            <RefreshCw className="w-4 h-4" />
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={onExpand || toggleFullscreen}
-          >
-            <Maximize2 className="w-4 h-4" />
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleOpenNewWindow}>
-            <ExternalLink className="w-4 h-4" />
+        <CardTitle className="flex items-center gap-2">
+          <MapPin className="w-5 h-5" />
+          Mapa em Tempo Real
+        </CardTitle>
+        <div className="flex items-center gap-2 flex-1 max-w-md mx-4">
+          <Input
+            placeholder="Buscar empresa..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            className="h-8"
+          />
+          <Button size="sm" variant="outline" onClick={handleSearch}>
+            <Search className="w-4 h-4" />
           </Button>
         </div>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={onExpand || toggleFullscreen}
+        >
+          <Maximize2 className="w-4 h-4" />
+        </Button>
       </CardHeader>
       <CardContent className="p-0 h-[calc(100%-80px)]">
         {renderContent()}

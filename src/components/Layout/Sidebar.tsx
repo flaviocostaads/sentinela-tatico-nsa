@@ -124,8 +124,10 @@ const Sidebar = ({ className }: SidebarProps) => {
                 key={index}
                 onClick={() => navigate(item.path)}
                 className={cn(
-                  "w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg transition-tactical hover:bg-accent/50",
-                  isActive ? "bg-tactical-blue text-white border border-tactical-blue/50 tactical-glow shadow-tactical font-medium" : "text-foreground hover:text-primary hover:bg-primary/10"
+                  "w-full flex items-center justify-between px-3 py-2.5 text-sm rounded-lg transition-tactical",
+                  isActive 
+                    ? "bg-tactical-blue text-white border border-tactical-blue/50 tactical-glow shadow-tactical font-medium" 
+                    : "text-foreground hover:text-primary hover:bg-primary/20 dark:hover:bg-primary/30 dark:hover:text-primary"
                 )}
               >
                 <div className="flex items-center space-x-3">

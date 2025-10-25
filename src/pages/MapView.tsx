@@ -27,6 +27,9 @@ interface Round {
   profiles?: {
     name: string;
   } | null;
+  round_templates?: {
+    name: string;
+  } | null;
 }
 
 interface Client {
@@ -65,7 +68,8 @@ const MapViewPage = () => {
         .select(`
           *,
           clients (name, address, lat, lng),
-          profiles (name)
+          profiles (name),
+          round_templates (name)
         `)
         .in('status', ['active', 'incident'])
         .order("created_at", { ascending: false });
@@ -176,7 +180,14 @@ const MapViewPage = () => {
                             {getStatusLabel(round.status)}
                           </Badge>
                         </div>
-                        <div className="space-y-1">
+                        <div className="space-y-2">
+                          {round.round_templates && (
+                            <div className="flex items-center space-x-1">
+                              <span className="text-xs font-semibold text-primary">
+                                📋 {round.round_templates.name}
+                              </span>
+                            </div>
+                          )}
                           <div className="flex items-center space-x-1">
                             <MapPin className="w-3 h-3 text-muted-foreground" />
                             <span className="text-xs text-muted-foreground truncate">

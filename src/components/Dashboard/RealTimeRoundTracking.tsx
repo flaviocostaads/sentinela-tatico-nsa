@@ -36,6 +36,9 @@ interface Round {
   profiles?: {
     name: string;
   } | null;
+  round_templates?: {
+    name: string;
+  } | null;
 }
 
 interface RealTimeRoundTrackingProps {
@@ -96,7 +99,8 @@ const RealTimeRoundTracking: React.FC<RealTimeRoundTrackingProps> = ({
         .select(`
           *,
           clients (name),
-          profiles (name)
+          profiles (name),
+          round_templates (name)
         `)
         .in('status', ['active', 'incident'])
         .order('created_at', { ascending: false });
@@ -199,14 +203,22 @@ const RealTimeRoundTracking: React.FC<RealTimeRoundTrackingProps> = ({
                 className="w-full justify-start"
                 onClick={() => handleRoundSelect(round)}
               >
-                <div className="flex items-center justify-between w-full">
-                  <span className="text-sm">{round.profiles?.name || 'Não atribuído'} - {round.clients.name}</span>
-                  <Badge
-                    variant={round.status === 'active' ? 'default' : 'destructive'}
-                    className="ml-2"
-                  >
-                    {round.status === 'active' ? 'Ativa' : 'Incidente'}
-                  </Badge>
+                <div className="flex flex-col items-start w-full gap-1">
+                  <div className="flex items-center justify-between w-full">
+                    <span className="text-sm font-medium">{round.profiles?.name || 'Não atribuído'}</span>
+                    <Badge
+                      variant={round.status === 'active' ? 'default' : 'destructive'}
+                      className="ml-2"
+                    >
+                      {round.status === 'active' ? 'Ativa' : 'Incidente'}
+                    </Badge>
+                  </div>
+                  <div className="flex flex-col gap-0.5 w-full">
+                    <span className="text-xs text-muted-foreground">📍 {round.clients.name}</span>
+                    {round.round_templates && (
+                      <span className="text-xs text-primary">📋 {round.round_templates.name}</span>
+                    )}
+                  </div>
                 </div>
               </Button>
             ))

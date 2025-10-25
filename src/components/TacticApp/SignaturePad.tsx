@@ -21,19 +21,29 @@ const SignaturePad = ({ onSignature, onCancel, clientName }: SignaturePadProps) 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Set canvas size
-    canvas.width = canvas.offsetWidth;
-    canvas.height = canvas.offsetHeight;
+    // Set canvas size - responsive for mobile
+    const updateCanvasSize = () => {
+      const container = canvas.parentElement;
+      if (container) {
+        canvas.width = container.offsetWidth;
+        canvas.height = Math.min(300, window.innerHeight * 0.4);
+      }
 
-    // Set drawing styles
-    ctx.strokeStyle = '#1f2937';
-    ctx.lineWidth = 2;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
+      // Set drawing styles
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
-    // Fill background with white
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Fill background with white
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    };
+
+    updateCanvasSize();
+    window.addEventListener('resize', updateCanvasSize);
+
+    return () => window.removeEventListener('resize', updateCanvasSize);
   }, []);
 
   const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
@@ -107,23 +117,24 @@ const SignaturePad = ({ onSignature, onCancel, clientName }: SignaturePadProps) 
   };
 
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle className="text-center">
-          Assinatura do Cliente
+        <CardTitle className="text-center text-xl">
+          ✍️ Assinatura do Cliente
         </CardTitle>
-        <p className="text-sm text-center text-muted-foreground">
+        <p className="text-sm text-center font-medium text-foreground">
           {clientName}
         </p>
         <p className="text-xs text-center text-muted-foreground">
-          Desenhe sua assinatura na área abaixo
+          👆 Assine com o dedo na área abaixo
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="border border-gray-300 rounded-lg overflow-hidden">
+        <div className="border-2 border-primary rounded-lg overflow-hidden bg-white">
           <canvas
             ref={canvasRef}
-            className="w-full h-40 cursor-crosshair touch-none"
+            className="w-full cursor-crosshair touch-none"
+            style={{ height: 'min(300px, 40vh)' }}
             onMouseDown={startDrawing}
             onMouseMove={draw}
             onMouseUp={stopDrawing}

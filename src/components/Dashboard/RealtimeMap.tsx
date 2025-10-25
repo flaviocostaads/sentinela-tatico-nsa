@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Navigation, User, X, RotateCcw, Search, ExternalLink } from "lucide-react";
+import { Navigation, User, X, RotateCcw, Search, ExternalLink, Users, MapPin, CheckCircle, AlertTriangle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -1364,71 +1364,83 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
 
   return (
     <Card className="tactical-card">
-      <CardHeader className="space-y-4">
-        <CardTitle className="flex items-center justify-between">
-          <div className="flex items-center space-x-2">
-            <Navigation className="w-5 h-5" />
-            <span>Mapa em Tempo Real</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Badge variant="secondary">
-              {clients.length} clientes • {userLocations.length} táticos • {roundCheckpoints.length} pontos de ronda
-            </Badge>
-            {hasActiveAlert && (
-              <Badge variant="destructive" className="animate-pulse">
-                🚨 {activeEmergencies.length} EMERGÊNCIA(S) ATIVA(S) • ÁUDIO: {isPlaying ? 'ATIVO' : 'INATIVO'}
-              </Badge>
-            )}
-            <Badge 
-              variant={isAutoUpdating ? "default" : "secondary"} 
-              className="flex items-center gap-2"
-            >
-              <div className={`w-2 h-2 rounded-full ${isAutoUpdating ? 'bg-tactical-green animate-pulse' : 'bg-gray-400'}`}></div>
-              <span className="text-xs">
-                {isAutoUpdating ? 'Auto-Atualização Ativa' : 'Desconectado'}
-              </span>
-            </Badge>
-            <Button 
-              size="sm" 
-              variant="outline" 
-              onClick={() => {
-                const mapElement = document.getElementById('realtime-map');
-                if (mapElement) {
-                  if (mapElement.requestFullscreen) {
-                    mapElement.requestFullscreen();
-                  }
-                }
-              }}
-            >
-              Tela Cheia
-            </Button>
-            <div className="text-xs text-muted-foreground">
-              Última atualização: {lastUpdateTime.toLocaleTimeString('pt-BR')}
-            </div>
-          </div>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+        <CardTitle className="flex items-center gap-2">
+          <Navigation className="w-5 h-5" />
+          Mapa em Tempo Real
         </CardTitle>
-        
-        {/* Search Bar */}
-        <div className="flex items-center gap-2 px-6">
-          <div className="relative flex-1 max-w-md">
+        <div className="flex items-center gap-2 flex-1 max-w-md mx-4">
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Buscar empresa por nome..."
+              placeholder="Buscar empresa..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              className="pl-10"
+              className="pl-10 h-8"
             />
           </div>
-          <Button onClick={handleSearch} variant="default" size="sm">
-            <Search className="w-4 h-4 mr-2" />
-            Localizar
+          <Button onClick={handleSearch} variant="outline" size="sm">
+            <Search className="w-4 h-4" />
           </Button>
         </div>
+        <Button 
+          size="sm" 
+          variant="outline" 
+          onClick={() => {
+            const mapElement = document.getElementById('realtime-map');
+            if (mapElement) {
+              if (mapElement.requestFullscreen) {
+                mapElement.requestFullscreen();
+              }
+            }
+          }}
+        >
+          <X className="w-4 h-4" />
+        </Button>
       </CardHeader>
       <CardContent className="p-0">
         <div id="realtime-map" ref={mapContainer} className="w-full h-[500px] rounded-lg relative">
+          {/* Stats Overlay - Top Left */}
+          <div className="absolute top-4 left-4 flex flex-wrap gap-2 pointer-events-none z-10">
+            <Badge className="bg-background/90 backdrop-blur pointer-events-auto">
+              <Users className="w-3 h-3 mr-1" />
+              {userLocations.length} Táticos
+            </Badge>
+            <Badge className="bg-background/90 backdrop-blur pointer-events-auto">
+              <MapPin className="w-3 h-3 mr-1" />
+              {clients.length} Clientes
+            </Badge>
+            {roundCheckpoints.length > 0 && (
+              <Badge className="bg-background/90 backdrop-blur pointer-events-auto">
+                <CheckCircle className="w-3 h-3 mr-1" />
+                {roundCheckpoints.length} Pontos
+              </Badge>
+            )}
+            {hasActiveAlert && (
+              <Badge variant="destructive" className="bg-background/90 backdrop-blur pointer-events-auto animate-pulse">
+                <AlertTriangle className="w-3 h-3 mr-1" />
+                {activeEmergencies.length} Emergências
+              </Badge>
+            )}
+          </div>
+
+          {/* Auto Update Badge - Bottom Left */}
+          <div className="absolute bottom-4 left-4 pointer-events-none z-10">
+            <Badge className="bg-background/95 backdrop-blur pointer-events-auto flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${isAutoUpdating ? 'bg-green-500 animate-pulse' : 'bg-gray-400'}`} />
+              <span className="text-xs">
+                {isAutoUpdating ? 'Auto Atualização Online' : 'Desconectado'}
+              </span>
+              {lastUpdateTime && (
+                <span className="text-xs text-muted-foreground">
+                  {lastUpdateTime.toLocaleTimeString('pt-BR')}
+                </span>
+              )}
+            </Badge>
+          </div>
+          
           {/* Emergency alerts - always visible, positioned based on fullscreen state */}
           <FullscreenEmergencyAlert isFullscreen={isFullscreen} />
           
