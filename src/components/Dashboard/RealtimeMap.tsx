@@ -909,7 +909,7 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
       el.style.position = 'relative'; // Ensure proper stacking
       el.textContent = checkpoint.visited ? '✓' : checkpoint.order_index.toString();
 
-      const marker = new mapboxgl.Marker({ element: el, anchor: 'center' })
+      const marker = new mapboxgl.Marker(el) // Fixed position, no anchor to prevent zoom shifts
         .setLngLat([checkpoint.lng, checkpoint.lat])
         .setPopup(
           new mapboxgl.Popup({ offset: 25, maxWidth: '300px' }).setHTML(`
@@ -997,10 +997,11 @@ const RealtimeMap = ({ isExpanded = false, onClose, onOpenNewWindow, onExpand, d
           continue;
         }
 
-        // Build waypoints: start location + all checkpoints
+        // Build waypoints: start (base) → all checkpoints → return to base
         const waypoints = [
-          `${userLocation.lng},${userLocation.lat}`, // Start point
-          ...roundCheckpoints.map(cp => `${cp.lng},${cp.lat}`)
+          `${userLocation.lng},${userLocation.lat}`, // 📍 BASE (start)
+          ...roundCheckpoints.map(cp => `${cp.lng},${cp.lat}`), // 🏢 All checkpoints in order
+          `${userLocation.lng},${userLocation.lat}` // 🏠 BASE (return) - closes the route
         ];
 
         console.log('🛣️ Calculating route with waypoints:', waypoints.length);
